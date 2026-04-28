@@ -28,7 +28,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      allowDangerousEmailAccountLinking: true,
       async authorize(credentials) {
         const email = credentials.email;
         const password = credentials.password;
@@ -67,7 +66,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       apiKey: process.env.RESEND_API_KEY,
       from: process.env.EMAIL_FROM,
       maxAge: 15 * 60, // 15 minutes
-      allowDangerousEmailAccountLinking: true,
     }),
   ],
   jwt: {
