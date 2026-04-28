@@ -1,0 +1,17 @@
+{
+  "name": "@pulse/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@pulse/config": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}

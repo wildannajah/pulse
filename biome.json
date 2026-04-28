@@ -1,0 +1,149 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/dist",
+      "!**/build",
+      "!**/out",
+      "!**/storybook-static",
+      "!**/coverage",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!**/.nest-cli-cache",
+      "!**/*.tsbuildinfo",
+      "!**/pnpm-lock.yaml",
+      "!apps/api/prisma/migrations",
+      "!apps/web/src/components/ui",
+      "!apps/web/public/mockServiceWorker.js"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["kebab-case"],
+            "strictCase": true,
+            "requireAscii": true
+          }
+        },
+        "noDefaultExport": "error",
+        "useImportType": "error",
+        "useExportType": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "formatter": {
+      "enabled": true,
+      "quoteStyle": "double"
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "apps/web/src/app/**/page.tsx",
+        "apps/web/src/app/**/layout.tsx",
+        "apps/web/src/app/**/loading.tsx",
+        "apps/web/src/app/**/error.tsx",
+        "apps/web/src/app/**/not-found.tsx",
+        "apps/web/src/app/**/global-error.tsx",
+        "apps/web/src/app/**/route.ts",
+        "apps/web/src/app/**/template.tsx",
+        "apps/web/src/app/**/default.tsx",
+        "apps/web/src/app/**/sitemap.ts",
+        "apps/web/src/app/**/robots.ts",
+        "apps/web/src/app/**/icon.tsx",
+        "apps/web/src/app/**/opengraph-image.tsx",
+        "apps/web/next.config.ts",
+        "apps/web/next-env.d.ts",
+        "apps/web/postcss.config.mjs",
+        "apps/web/.storybook/**",
+        "apps/web/instrumentation.ts",
+        "apps/web/middleware.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/stories/**", "apps/web/**/*.stories.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/api/**/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.config.{ts,js,mjs,cjs}",
+        "**/vitest.config.ts",
+        "**/playwright.config.ts",
+        "**/next.config.ts",
+        "**/postcss.config.{js,mjs,cjs}"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ]
+}
