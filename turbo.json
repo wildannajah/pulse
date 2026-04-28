@@ -6,7 +6,16 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", "build/**", "storybook-static/**"],
-      "env": ["NODE_ENV", "NEXT_PUBLIC_*"]
+      "env": [
+        "NODE_ENV",
+        "NEXT_PUBLIC_*",
+        "DATABASE_URL",
+        "AUTH_SECRET",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "RESEND_API_KEY",
+        "EMAIL_FROM"
+      ]
     },
     "dev": {
       "cache": false,

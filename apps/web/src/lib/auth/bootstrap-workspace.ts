@@ -1,7 +1,13 @@
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+type TransactionClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+
 export async function bootstrapWorkspace(userId: string): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: TransactionClient) => {
     const existing = await tx.workspaceMember.findFirst({
       where: { userId },
     });
