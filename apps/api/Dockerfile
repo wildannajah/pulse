@@ -10,7 +10,7 @@ COPY apps/api/ ./apps/api/
 
 RUN pnpm install --frozen-lockfile
 
-RUN pnpm --filter api build
+RUN cd apps/api && npx tsc -p tsconfig.build.json && echo "Build OK" && ls dist/
 
 # ─────────────────────────────────────────────
 FROM node:20-alpine AS runner
