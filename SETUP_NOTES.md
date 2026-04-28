@@ -288,3 +288,67 @@ SIGTERM                    → exit 143 + log "[PrismaService] Prisma disconnect
 - **`apps/api/**/*.ts` filename rule is disabled** because Nest's `*.module.ts`, `*.controller.ts`, `*.service.ts` convention reads as multi-dot, which Biome's `useFilenamingConvention` flags. The dot-pattern is a stronger constraint than the lint rule, so we accept it.
 - **Workers use CommonJS.** If you later need ESM (e.g. to share an ESM-only schema package), switch `module: "NodeNext"` and add `.js` extensions to relative imports.
 - **`packages/ui` has no `typecheck` script** while it has no `.tsx` source. Re-add `"typecheck": "tsc --noEmit"` once the first component lands; until then `tsc` errors with TS18003.
+
+---
+
+## Auth & multi-brand scoping
+
+Added 2026-04-29. Lands production-ready authentication and per-brand authorization infrastructure.
+
+### Why Auth.js lives in `apps/web`, not `apps/api`
+
+Auth.js v5 (`next-auth@beta`) is purpose-built for Next.js — it handles SSR session hydration, API route handlers, and middleware-based route protection natively. Placing it in the NestJS API would require reimplementing all of these integrations. The API authenticates cross-origin requests by validating the session token (stored in Postgres) sent as `Authorization: Bearer <token>`.
+
+### Custom Prisma adapter
+
+Our schema was designed before Auth.js integration and uses field names that differ from Auth.js's expected conventions:
+
+| Auth.js expects    | Our schema uses        |
+| ------------------ | ---------------------- |
+| `User.emailVerified` | `User.emailVerifiedAt` |
+| `User.image`       | `User.avatarUrl`       |
+| `Account`          | `OAuthAccount`         |
+| `Account.access_token` | `OAuthAccount.accessToken` |
+| `Account.refresh_token` | `OAuthAccount.refreshToken` |
+| `Account.expires_at` (unix seconds) | `OAuthAccount.expiresAt` (DateTime) |
+| `Session.expires`  | `Session.expiresAt`    |
+
+A custom adapter (`apps/web/src/lib/auth/prisma-adapter.ts`) maps between these conventions so we never need to rename schema fields. Auth.js's `Account.type`, `token_type`, `scope`, `id_token`, and `session_state` fields are discarded on write since our `OAuthAccount` model doesn't store them.
+
+### Bearer token cross-origin pattern
+
+1. User signs in via `apps/web` — Auth.js creates a `Session` row in Postgres and sets a `sessionToken` cookie.
+2. The frontend sends the session token as `Authorization: Bearer <token>` to the NestJS API.
+3. `SessionGuard` (`apps/api/src/auth/session.guard.ts`) validates the token against the same Postgres `sessions` table, checks expiry, and attaches the user to the request.
+
+### Brand-scoping enforcement
+
+`BrandScopeGuard` runs after `SessionGuard`:
+1. Reads `x-brand-id` header (400 if missing).
+2. Looks up the brand and verifies the authenticated user has a `WorkspaceMember` row for the brand's workspace.
+3. Respects the `brandAccess` array — if non-empty, the brand ID must appear in it.
+4. Attaches the brand to the request (403 if any check fails).
+
+### Workspace bootstrap on first sign-in
+
+On the first successful sign-in (any provider), `bootstrapWorkspace()` atomically creates:
+- A `Workspace` (type: `PERSONAL`, owner: the user)
+- A `WorkspaceMember` (role: `OWNER`)
+- A default `Brand` within the workspace
+
+The function is idempotent — it checks for existing `WorkspaceMember` rows and skips if any exist. Runs inside a Prisma transaction.
+
+### Providers configured
+
+1. **Credentials** — email + bcrypt-hashed password (12 rounds). Generic "Invalid credentials" error — never reveals whether an email exists.
+2. **Google OAuth** — standard OAuth flow via `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+3. **Resend magic link** — 15-minute token expiry, sends via Resend API. Requires the `VerificationToken` model (migration `add_verification_tokens` applied).
+
+### Encryption service
+
+AES-256-GCM encryption (`apps/api/src/encryption/encryption.service.ts`) for encrypting OAuth tokens at rest in `connected_accounts`. Key sourced from `ENCRYPTION_KEY` env var (64 hex chars = 32 bytes). Format: `base64(iv || ciphertext || authTag)`.
+
+### New environment variables
+
+**`apps/api`**: `AUTH_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars)
+**`apps/web`**: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `DATABASE_URL`

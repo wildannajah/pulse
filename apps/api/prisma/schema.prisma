@@ -227,6 +227,15 @@ model Session {
   @@map("sessions")
 }
 
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // WORKSPACES (TENANTS)
 // A workspace can have multiple brands. Solo creators have 1 workspace + 1 brand.
