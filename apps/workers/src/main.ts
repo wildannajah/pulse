@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { postPublishWorker } from "./queues/post-publish.worker";
 import { redis } from "./redis";
 

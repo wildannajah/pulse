@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// Pulse — Database Schema (Prisma)
+// Covers Phase 1, 2, and 3 of the PRD
+// Multi-tenant: shared DB, scoped by workspace_id
+// ═══════════════════════════════════════════════════════════════════════════
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,28 +13,1259 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum Platform {
+  INSTAGRAM
+  TWITTER
+  FACEBOOK
+  LINKEDIN
+  THREADS
+  TIKTOK
+  YOUTUBE
+}
+
+enum WorkspaceType {
+  PERSONAL    // Single user / creator
+  TEAM        // Marketing team
+  AGENCY      // Multi-client agency
+}
+
+enum WorkspaceRole {
+  OWNER       // Full control + billing
+  ADMIN       // Full control, no billing
+  EDITOR      // Create + schedule, no publishing approval
+  VIEWER      // Read-only
+}
+
+enum AccountStatus {
+  ACTIVE
+  EXPIRED         // Token expired, needs reauth
+  REVOKED         // User revoked access on platform
+  RECONNECTING    // In OAuth flow
+  ERROR           // Persistent API errors
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING      // Currently being published
+  PUBLISHED
+  PARTIALLY_FAILED // Some platforms succeeded, some failed
+  FAILED
+  ARCHIVED
+}
+
+enum PostMediaType {
+  IMAGE
+  VIDEO
+  GIF
+  CAROUSEL        // Multiple images (Instagram)
+  DOCUMENT        // PDF (LinkedIn)
+}
+
+enum ApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+enum InboxItemType {
+  DIRECT_MESSAGE
+  COMMENT
+  MENTION
+  REPLY
+  REACTION
+}
+
+enum InboxStatus {
+  UNREAD
+  READ
+  REPLIED
+  RESOLVED
+  ARCHIVED
+}
+
+enum SentimentTag {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  UNKNOWN
+}
+
+enum NotificationType {
+  POST_PUBLISHED
+  POST_FAILED
+  TOKEN_EXPIRED
+  APPROVAL_REQUESTED
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+  MENTION_RECEIVED
+  COMMENT_RECEIVED
+  TEAM_INVITED
+  ANALYTICS_DIGEST
+}
+
+enum JobType {
+  POST_PUBLISH
+  TOKEN_REFRESH
+  ANALYTICS_SYNC
+  INBOX_SYNC
+  REPORT_GENERATION
+  MEDIA_PROCESSING
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  RETRYING
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  AGENCY
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USERS & AUTHENTICATION
+// ═══════════════════════════════════════════════════════════════════════════
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  brands Brand[]
-
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerifiedAt DateTime?
+  name            String
+  avatarUrl       String?
+  passwordHash    String?   // Null if SSO-only
+  timezone        String    @default("UTC")
+  locale          String    @default("en")
+  
+  // 2FA
+  totpSecret        String?
+  totpEnabledAt     DateTime?
+  backupCodes       String[]  // Hashed
+  
+  lastLoginAt     DateTime?
+  lastActiveAt    DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime? // Soft delete
+  
+  // Relations
+  ownedWorkspaces       Workspace[]              @relation("WorkspaceOwner")
+  workspaceMemberships  WorkspaceMember[]
+  sessions              Session[]
+  oauthAccounts         OAuthAccount[]
+  posts                 Post[]                   @relation("PostAuthor")
+  comments              PostComment[]
+  approvals             PostApproval[]
+  inboxAssignments      InboxItem[]              @relation("InboxAssignee")
+  inboxReplies          InboxReply[]
+  notifications         Notification[]
+  notificationSettings  NotificationSetting?
+  apiKeys               ApiKey[]
+  auditLogs             AuditLog[]               @relation("AuditActor")
+  invitedMembers        WorkspaceInvitation[]    @relation("InvitedBy")
+  
+  @@index([email])
+  @@index([deletedAt])
   @@map("users")
 }
 
-model Brand {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  ownerId   String   @map("owner_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+// SSO providers (Google, GitHub, etc.) — separate from social platform connections
+model OAuthAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String   // "google" | "github" | "microsoft"
+  providerAccountId String
+  accessToken     String?  @db.Text
+  refreshToken    String?  @db.Text
+  expiresAt       DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionToken String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
 
+// ═══════════════════════════════════════════════════════════════════════════
+// WORKSPACES (TENANTS)
+// A workspace can have multiple brands. Solo creators have 1 workspace + 1 brand.
+// Agencies have 1 workspace + many brands (clients).
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Workspace {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique // URL-friendly identifier
+  type        WorkspaceType @default(PERSONAL)
+  ownerId     String
+  
+  // Branding
+  logoUrl     String?
+  primaryColor String?      // For white-label (Phase 3)
+  
+  // Plan
+  plan              SubscriptionPlan   @default(FREE)
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+  trialEndsAt       DateTime?
+  
+  // Limits (enforced based on plan)
+  maxBrands         Int @default(1)
+  maxMembers        Int @default(1)
+  maxScheduledPosts Int @default(10)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  
+  owner             User                  @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members           WorkspaceMember[]
+  invitations       WorkspaceInvitation[]
+  brands            Brand[]
+  subscription      Subscription?
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+  
   @@index([ownerId])
+  @@index([slug])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id           String        @id @default(cuid())
+  workspaceId  String
+  userId       String
+  role         WorkspaceRole @default(EDITOR)
+  
+  // Brand-level access (null = access to all brands in workspace)
+  brandAccess  String[]      // Array of brand IDs; empty = all brands
+  
+  joinedAt     DateTime      @default(now())
+  invitedById  String?
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole @default(EDITOR)
+  token       String        @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InvitedBy", fields: [invitedById], references: [id])
+  
+  @@unique([workspaceId, email])
+  @@index([token])
+  @@index([email])
+  @@map("workspace_invitations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BRANDS
+// A brand is a managed entity (Nike, Adidas, etc.) within a workspace.
+// Each brand has its own social accounts, posts, calendar, inbox.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Brand {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  slug         String
+  description  String?
+  avatarUrl    String?
+  brandColor   String?  // Hex color
+  websiteUrl   String?
+  industry     String?
+  timezone     String   @default("UTC")
+  
+  // Brand voice for AI assistant
+  brandVoice   String?  @db.Text  // Custom prompt for AI
+  
+  // Default settings
+  defaultHashtags    String[]
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedAccounts  ConnectedAccount[]
+  posts              Post[]
+  postTemplates      PostTemplate[]
+  hashtagSets        HashtagSet[]
+  inboxItems         InboxItem[]
+  savedReplies       SavedReply[]
+  competitors        Competitor[]
+  reports            AnalyticsReport[]
+  contentLabels      ContentLabel[]
+  
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
   @@map("brands")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONNECTED ACCOUNTS (OAuth tokens per brand per platform)
+// This is the most security-critical table. Tokens are encrypted at rest.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ConnectedAccount {
+  id              String        @id @default(cuid())
+  brandId         String
+  platform        Platform
+  
+  // Platform-specific identifiers
+  platformUserId  String        // Their ID on the platform
+  platformUsername String       // @handle
+  platformPageId  String?       // For FB Pages, IG Business
+  displayName     String?
+  avatarUrl       String?
+  profileUrl      String?
+  
+  // Encrypted credentials (use app-level encryption before storing)
+  accessToken     String        @db.Text
+  refreshToken    String?       @db.Text
+  tokenExpiresAt  DateTime?
+  scopes          String[]      // Granted permissions
+  
+  // Status
+  status          AccountStatus @default(ACTIVE)
+  lastSyncedAt    DateTime?
+  lastErrorAt     DateTime?
+  lastErrorMessage String?      @db.Text
+  errorCount      Int           @default(0)
+  
+  // Cached metadata
+  followerCount   Int?
+  followingCount  Int?
+  postCount       Int?
+  
+  // Connection metadata
+  connectedById   String?       // User who connected this
+  connectedAt     DateTime      @default(now())
+  reconnectedAt   DateTime?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  
+  brand           Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  postPublications PostPublication[]
+  inboxItems      InboxItem[]
+  analyticsSnapshots AnalyticsSnapshot[]
+  audienceData    AudienceInsight[]
+  
+  @@unique([brandId, platform, platformUserId])
+  @@index([brandId])
+  @@index([platform])
+  @@index([status])
+  @@index([tokenExpiresAt])
+  @@map("connected_accounts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POSTS & CONTENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Post {
+  id            String      @id @default(cuid())
+  brandId       String
+  authorId      String
+  
+  // Core content
+  content       String      @db.Text  // Universal caption
+  status        PostStatus  @default(DRAFT)
+  
+  // Scheduling
+  scheduledAt   DateTime?
+  publishedAt   DateTime?
+  timezone      String      @default("UTC")
+  
+  // Approval (Phase 2)
+  approvalStatus  ApprovalStatus @default(NOT_REQUIRED)
+  
+  // Source / template
+  templateId    String?
+  duplicatedFromId String?  // For "duplicate post" feature
+  bulkUploadId  String?     // For CSV bulk upload (Phase 3)
+  
+  // Metadata
+  hashtags      String[]
+  mentions      String[]
+  firstComment  String?     @db.Text  // For Instagram first-comment scheduling
+  
+  // AI usage tracking
+  aiGenerated   Boolean     @default(false)
+  aiPromptUsed  String?     @db.Text
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+  
+  brand         Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  author        User             @relation("PostAuthor", fields: [authorId], references: [id])
+  template      PostTemplate?    @relation(fields: [templateId], references: [id])
+  duplicatedFrom Post?           @relation("PostDuplicate", fields: [duplicatedFromId], references: [id])
+  duplicates    Post[]           @relation("PostDuplicate")
+  bulkUpload    BulkUpload?      @relation(fields: [bulkUploadId], references: [id])
+  
+  // Per-platform variants (since each platform has its own format)
+  variants      PostVariant[]
+  
+  // Media files
+  media         PostMedia[]
+  
+  // Publishing results per platform
+  publications  PostPublication[]
+  
+  // Approvals
+  approvals     PostApproval[]
+  
+  // Comments / feedback during draft
+  comments      PostComment[]
+  
+  // Labels for filtering
+  labels        PostContentLabel[]
+  
+  @@index([brandId, status])
+  @@index([brandId, scheduledAt])
+  @@index([brandId, publishedAt])
+  @@index([authorId])
+  @@index([deletedAt])
+  @@map("posts")
+}
+
+// Per-platform overrides (e.g. shorter version for Twitter, different hashtags for IG)
+model PostVariant {
+  id            String   @id @default(cuid())
+  postId        String
+  platform      Platform
+  
+  content       String   @db.Text  // Platform-specific text
+  hashtags      String[]
+  mentions      String[]
+  
+  // Platform-specific options
+  isThread      Boolean  @default(false)  // Twitter thread
+  threadParts   Json?    // Array of tweets
+  altText       String?  @db.Text         // Image alt text
+  
+  // Override media (if different from parent post)
+  mediaIds      String[]
+  
+  enabled       Boolean  @default(true)   // User can disable per platform
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  @@unique([postId, platform])
+  @@index([postId])
+  @@map("post_variants")
+}
+
+// Tracks the actual API publish attempt per platform
+model PostPublication {
+  id                  String     @id @default(cuid())
+  postId              String
+  connectedAccountId  String
+  platform            Platform
+  
+  status              PostStatus @default(SCHEDULED)
+  
+  // Result from platform API
+  platformPostId      String?    // Their post ID after publish
+  platformPostUrl     String?    // Permalink
+  publishedAt         DateTime?
+  
+  // Error tracking
+  attemptCount        Int        @default(0)
+  lastAttemptAt       DateTime?
+  errorCode           String?
+  errorMessage        String?    @db.Text
+  
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  
+  post              Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  connectedAccount  ConnectedAccount  @relation(fields: [connectedAccountId], references: [id])
+  metrics           PostMetric[]
+  
+  @@unique([postId, connectedAccountId])
+  @@index([postId])
+  @@index([platform, status])
+  @@index([publishedAt])
+  @@map("post_publications")
+}
+
+model PostMedia {
+  id            String        @id @default(cuid())
+  postId        String?       // Null if uploaded but not yet attached
+  brandId       String
+  
+  type          PostMediaType
+  url           String        // CDN URL
+  thumbnailUrl  String?
+  fileName      String
+  fileSize      BigInt        // bytes
+  mimeType      String
+  width         Int?
+  height        Int?
+  durationMs    Int?          // For video
+  altText       String?       @db.Text
+  
+  // Cloudflare R2 / S3 reference
+  storageBucket String
+  storageKey    String
+  
+  position      Int           @default(0)  // For carousels
+  
+  createdAt     DateTime      @default(now())
+  uploadedById  String?
+  
+  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  
+  @@index([postId])
+  @@index([brandId])
+  @@map("post_media")
+}
+
+model PostTemplate {
+  id          String   @id @default(cuid())
+  brandId     String
+  name        String
+  description String?
+  
+  content     String   @db.Text
+  hashtags    String[]
+  platforms   Platform[]
+  
+  // Usage tracking
+  useCount    Int      @default(0)
+  lastUsedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  
+  brand Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  posts Post[]
+  
+  @@index([brandId])
+  @@map("post_templates")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// APPROVAL WORKFLOW (Phase 2)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model PostApproval {
+  id          String         @id @default(cuid())
+  postId      String
+  reviewerId  String
+  
+  status      ApprovalStatus @default(PENDING)
+  comment     String?        @db.Text
+  
+  requestedAt DateTime       @default(now())
+  respondedAt DateTime?
+  
+  post     Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  reviewer User @relation(fields: [reviewerId], references: [id])
+  
+  @@index([postId])
+  @@index([reviewerId, status])
+  @@map("post_approvals")
+}
+
+// Internal feedback comments during draft (separate from social comments)
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String   @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+  
+  @@index([postId])
+  @@map("post_comments")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HASHTAGS, LABELS, BULK UPLOAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+model HashtagSet {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  hashtags  String[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  @@index([brandId])
+  @@map("hashtag_sets")
+}
+
+model ContentLabel {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  color     String
+  
+  createdAt DateTime @default(now())
+  
+  brand Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  posts PostContentLabel[]
+  
+  @@unique([brandId, name])
+  @@index([brandId])
+  @@map("content_labels")
+}
+
+model PostContentLabel {
+  postId  String
+  labelId String
+  
+  post  Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  label ContentLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  
+  @@id([postId, labelId])
+  @@map("post_content_labels")
+}
+
+// Phase 3: CSV bulk upload
+model BulkUpload {
+  id              String    @id @default(cuid())
+  brandId         String
+  uploadedById    String
+  
+  fileName        String
+  fileUrl         String
+  totalRows       Int
+  successfulRows  Int       @default(0)
+  failedRows      Int       @default(0)
+  errorReport     Json?     // Per-row errors
+  
+  status          String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  processedAt     DateTime?
+  
+  createdAt       DateTime  @default(now())
+  
+  posts Post[]
+  
+  @@index([brandId])
+  @@map("bulk_uploads")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIFIED INBOX
+// ═══════════════════════════════════════════════════════════════════════════
+
+model InboxItem {
+  id                  String        @id @default(cuid())
+  brandId             String
+  connectedAccountId  String
+  platform            Platform
+  
+  type                InboxItemType
+  status              InboxStatus   @default(UNREAD)
+  
+  // Sender info
+  platformSenderId    String
+  senderUsername      String
+  senderDisplayName   String?
+  senderAvatarUrl     String?
+  
+  // Content
+  content             String        @db.Text
+  mediaUrls           String[]
+  
+  // Context (if reply/comment)
+  parentPostId        String?       // Our post ID if comment on our content
+  platformParentId    String?       // Platform's post ID
+  platformItemId      String        // ID of this message on platform
+  threadId            String?       // For grouping conversations
+  
+  // Engagement
+  sentimentTag        SentimentTag  @default(UNKNOWN)
+  sentimentScore      Float?        // -1 to 1
+  isVip               Boolean       @default(false)
+  
+  // Assignment (Phase 2)
+  assignedToId        String?
+  assignedAt          DateTime?
+  
+  // Timestamps
+  receivedAt          DateTime
+  readAt              DateTime?
+  resolvedAt          DateTime?
+  resolvedById        String?
+  
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  
+  brand             Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  connectedAccount  ConnectedAccount   @relation(fields: [connectedAccountId], references: [id])
+  assignedTo        User?              @relation("InboxAssignee", fields: [assignedToId], references: [id])
+  replies           InboxReply[]
+  
+  @@unique([connectedAccountId, platformItemId])
+  @@index([brandId, status])
+  @@index([brandId, type])
+  @@index([assignedToId, status])
+  @@index([receivedAt])
+  @@map("inbox_items")
+}
+
+model InboxReply {
+  id              String    @id @default(cuid())
+  inboxItemId     String
+  authorId        String
+  
+  content         String    @db.Text
+  mediaUrls       String[]
+  
+  // Send result
+  sentAt          DateTime?
+  platformReplyId String?
+  errorMessage    String?
+  
+  createdAt       DateTime  @default(now())
+  
+  inboxItem InboxItem @relation(fields: [inboxItemId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id])
+  
+  @@index([inboxItemId])
+  @@map("inbox_replies")
+}
+
+model SavedReply {
+  id        String   @id @default(cuid())
+  brandId   String
+  title     String
+  content   String   @db.Text
+  category  String?
+  useCount  Int      @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  @@index([brandId])
+  @@map("saved_replies")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANALYTICS
+// Time-series snapshots: daily aggregates per platform per brand
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AnalyticsSnapshot {
+  id                  String   @id @default(cuid())
+  connectedAccountId  String
+  date                DateTime @db.Date  // Daily granularity
+  
+  // Account-level metrics
+  followers           Int
+  following           Int
+  totalPosts          Int
+  
+  // Engagement
+  impressions         BigInt   @default(0)
+  reach               BigInt   @default(0)
+  profileViews        Int      @default(0)
+  websiteClicks       Int      @default(0)
+  
+  // Engagement rate (calculated)
+  engagementRate      Float    @default(0)
+  
+  // Platform-specific raw data
+  rawMetrics          Json?
+  
+  syncedAt            DateTime @default(now())
+  
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  
+  @@unique([connectedAccountId, date])
+  @@index([connectedAccountId, date])
+  @@map("analytics_snapshots")
+}
+
+// Per-post metrics
+model PostMetric {
+  id                String   @id @default(cuid())
+  publicationId     String
+  
+  // Metrics
+  likes             Int      @default(0)
+  comments          Int      @default(0)
+  shares            Int      @default(0)
+  saves             Int      @default(0)
+  impressions       BigInt   @default(0)
+  reach             BigInt   @default(0)
+  videoViews        BigInt   @default(0)
+  videoCompletionRate Float?
+  clickThroughs     Int      @default(0)
+  engagementRate    Float    @default(0)
+  
+  // Snapshot
+  snapshotAt        DateTime @default(now())
+  
+  // Platform-specific raw response
+  rawData           Json?
+  
+  publication PostPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  
+  @@index([publicationId, snapshotAt])
+  @@map("post_metrics")
+}
+
+model AudienceInsight {
+  id                  String   @id @default(cuid())
+  connectedAccountId  String
+  date                DateTime @db.Date
+  
+  // Demographics
+  ageRanges           Json?    // { "13-17": 5, "18-24": 30, ... }
+  genderSplit         Json?    // { "male": 45, "female": 55 }
+  topCountries        Json?    // [{ country: "US", percentage: 40 }]
+  topCities           Json?
+  topLanguages        Json?
+  
+  // Activity
+  mostActiveHours     Json?    // Array of 24 numbers (engagement per hour)
+  mostActiveDays      Json?    // Array of 7 numbers
+  
+  syncedAt            DateTime @default(now())
+  
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  
+  @@unique([connectedAccountId, date])
+  @@index([connectedAccountId])
+  @@map("audience_insights")
+}
+
+// Phase 3: Competitor tracking
+model Competitor {
+  id              String   @id @default(cuid())
+  brandId         String
+  platform        Platform
+  platformUserId  String
+  username        String
+  displayName     String?
+  avatarUrl       String?
+  
+  // Cached snapshot
+  followerCount   Int?
+  postCount       Int?
+  lastSyncedAt    DateTime?
+  
+  createdAt       DateTime @default(now())
+  
+  brand     Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  snapshots CompetitorSnapshot[]
+  
+  @@unique([brandId, platform, platformUserId])
+  @@index([brandId])
+  @@map("competitors")
+}
+
+model CompetitorSnapshot {
+  id            String   @id @default(cuid())
+  competitorId  String
+  date          DateTime @db.Date
+  
+  followers     Int
+  posts         Int
+  avgEngagement Float
+  topPostsData  Json?
+  
+  syncedAt      DateTime @default(now())
+  
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  
+  @@unique([competitorId, date])
+  @@index([competitorId])
+  @@map("competitor_snapshots")
+}
+
+// Phase 3: Custom analytics reports
+model AnalyticsReport {
+  id          String   @id @default(cuid())
+  brandId     String
+  name        String
+  description String?
+  
+  // Configuration
+  dateRangeStart DateTime
+  dateRangeEnd   DateTime
+  platforms      Platform[]
+  metrics        String[]  // Selected metrics
+  
+  // Output
+  pdfUrl         String?
+  generatedAt    DateTime?
+  
+  // Schedule (recurring reports)
+  recurrence     String?   // "weekly" | "monthly" | null
+  nextRunAt      DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  @@index([brandId])
+  @@map("analytics_reports")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI ASSISTANT USAGE
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AiGeneration {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  userId          String
+  brandId         String?
+  
+  type            String   // "caption" | "rewrite" | "hashtags" | "ideas"
+  prompt          String   @db.Text
+  response        String   @db.Text
+  
+  // Cost tracking
+  modelUsed       String   // e.g., "claude-sonnet-4-5"
+  inputTokens     Int
+  outputTokens    Int
+  estimatedCostCents Int
+  
+  // Feedback
+  wasUsed         Boolean? // Did the user actually use this generation?
+  rating          Int?     // 1-5 user feedback
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([workspaceId, createdAt])
+  @@index([userId])
+  @@map("ai_generations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String           @db.Text
+  
+  // Optional related entities
+  relatedPostId      String?
+  relatedInboxItemId String?
+  relatedBrandId     String?
+  
+  // Action
+  actionUrl  String?
+  
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationSetting {
+  id      String @id @default(cuid())
+  userId  String @unique
+  
+  // Channel preferences
+  emailEnabled Boolean @default(true)
+  pushEnabled  Boolean @default(true)
+  inAppEnabled Boolean @default(true)
+  
+  // Per-type preferences (JSON for flexibility)
+  preferences  Json    @default("{}")
+  
+  // Digest preferences
+  digestFrequency String @default("daily") // "off" | "daily" | "weekly"
+  digestTime      String @default("09:00")
+  
+  updatedAt DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("notification_settings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKGROUND JOBS (BullMQ tracking)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model JobLog {
+  id            String    @id @default(cuid())
+  type          JobType
+  status        JobStatus @default(PENDING)
+  
+  // Context
+  workspaceId   String?
+  brandId       String?
+  postId        String?
+  
+  // Job data
+  payload       Json
+  result        Json?
+  
+  // Error tracking
+  errorMessage  String?   @db.Text
+  errorStack    String?   @db.Text
+  attemptCount  Int       @default(0)
+  maxAttempts   Int       @default(3)
+  
+  // Timing
+  scheduledFor  DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  durationMs    Int?
+  
+  // BullMQ reference
+  bullJobId     String?
+  
+  createdAt     DateTime  @default(now())
+  
+  @@index([type, status])
+  @@index([workspaceId])
+  @@index([scheduledFor])
+  @@map("job_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BILLING & SUBSCRIPTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  workspaceId         String             @unique
+  
+  plan                SubscriptionPlan
+  status              SubscriptionStatus
+  
+  // Billing
+  stripeCustomerId    String?            @unique
+  stripeSubscriptionId String?           @unique
+  stripePriceId       String?
+  
+  // Period
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean            @default(false)
+  cancelledAt         DateTime?
+  
+  // Trial
+  trialStart          DateTime?
+  trialEnd            DateTime?
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+  
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                String    @id @default(cuid())
+  subscriptionId    String
+  
+  stripeInvoiceId   String    @unique
+  amountCents       Int
+  currency          String    @default("usd")
+  status            String    // paid | pending | failed
+  invoiceUrl        String?
+  pdfUrl            String?
+  
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  @@index([subscriptionId])
+  @@map("invoices")
+}
+
+// Track usage for plan-based limits
+model UsageRecord {
+  id          String   @id @default(cuid())
+  workspaceId String
+  
+  metric      String   // "posts_scheduled" | "ai_generations" | "api_calls"
+  amount      Int      @default(1)
+  
+  // Period
+  periodStart DateTime
+  periodEnd   DateTime
+  
+  metadata    Json?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([workspaceId, metric, periodStart])
+  @@map("usage_records")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API KEYS (for programmatic access — Phase 3)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  createdById   String
+  
+  name          String
+  keyHash       String    @unique  // SHA-256 of the actual key
+  keyPrefix     String              // First 8 chars for display (pk_live_...)
+  
+  // Permissions
+  scopes        String[]
+  
+  // Usage
+  lastUsedAt    DateTime?
+  lastUsedIp    String?
+  
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  
+  createdAt     DateTime  @default(now())
+  
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id])
+  
+  @@index([workspaceId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIT LOG (security & compliance)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  actorId     String?  // User who performed the action
+  
+  action      String   // "post.published" | "user.invited" | "account.connected"
+  
+  // What was acted upon
+  targetType  String?  // "Post" | "User" | "ConnectedAccount"
+  targetId    String?
+  
+  // Context
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  metadata    Json?
+  
+  createdAt   DateTime @default(now())
+  
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actor     User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  
+  @@index([workspaceId, createdAt])
+  @@index([actorId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FEATURE FLAGS (gradual rollouts, beta features)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  
+  enabled     Boolean  @default(false)
+  
+  // Targeting rules (JSON for flexibility)
+  rules       Json?    // { "workspaces": ["id1"], "plans": ["AGENCY"] }
+  
+  // Rollout percentage (0-100)
+  rolloutPercentage Int @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([key])
+  @@map("feature_flags")
 }
