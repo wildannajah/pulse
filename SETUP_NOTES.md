@@ -49,13 +49,17 @@ pulse/
 │   │
 │   ├── api/                     # NestJS 11 + Prisma 6 + Postgres
 │   │   ├── .env.example
+│   │   ├── Dockerfile           # multi-stage builder/runner for Railway
 │   │   ├── nest-cli.json
-│   │   ├── prisma/schema.prisma # User + Brand placeholder
+│   │   ├── prisma/
+│   │   │   ├── migrations/      # initial_schema applied to Railway Postgres
+│   │   │   └── schema.prisma    # full Pulse model (~30 tables, PRD Phase 1–3)
 │   │   ├── src/
 │   │   │   ├── app.module.ts
 │   │   │   ├── config/env-schema.ts # Zod validateEnv
-│   │   │   ├── health/{health.controller.ts, health.module.ts}
-│   │   │   └── main.ts
+│   │   │   ├── health/{health.controller.ts, health.module.ts}  # /health + /health/db
+│   │   │   ├── prisma/{prisma.module.ts, prisma.service.ts}     # @Global, lifecycle-managed
+│   │   │   └── main.ts          # CORS + enableShutdownHooks
 │   │   ├── tsconfig.build.json
 │   │   └── tsconfig.json
 │   │
@@ -213,9 +217,10 @@ Dev:
 - **Biome CSS parser has `tailwindDirectives: true`** — without it, Biome rejects `@theme`, `@source`, `@custom-variant`, and `@apply`.
 
 ### Backend
-- **NestJS 11.** Latest. Health endpoint at `GET /health`.
+- **NestJS 11.** Health endpoints at `GET /health` (process liveness) and `GET /health/db` (DB readiness — runs `SELECT 1`, returns 503 on failure). Splitting them lets the load balancer hit a cheap probe while we still have a deeper dependency check for ourselves.
 - **`@nestjs/config` + Zod env validation.** `validateEnv` formats Zod issues with `path` + `message` so a misconfigured env causes Nest to refuse to boot loudly.
-- **Prisma 6 placeholder schema.** `User` and `Brand` only — enough to verify `prisma generate` once `DATABASE_URL` is set. Per CLAUDE.md, Brand carries `ownerId` with an `@@index` and the table is `@@map("brands")`.
+- **Prisma 6 wired as a `@Global` module.** `PrismaService extends PrismaClient` and connects in `onModuleInit` (fail-fast on a bad `DATABASE_URL`), disconnects in `onModuleDestroy`. `app.enableShutdownHooks()` wires SIGINT/SIGTERM into Nest's lifecycle so the disconnect actually fires. Single `// biome-ignore lint/style/useImportType` on the controller import — Biome flags `PrismaService` as type-only, but NestJS DI needs the runtime class for `emitDecoratorMetadata` to emit the `design:paramtypes` token.
+- **Full Pulse schema applied.** `prisma/schema.prisma` (~1271 lines, ~30 tables, all enums) is the source of truth for PRD Phase 1–3. Initial migration `20260428083308_initial_schema` is committed under `prisma/migrations/`; the prior `db push` history was dropped via `migrate reset` and re-bootstrapped through `migrate dev` so we have a real migration trail going forward.
 
 ### Quality gates
 - **Lefthook runs `biome check --write` on staged files** with `stage_fixed: true`, so formatter fixes are added back to the commit. Glob covers `js,jsx,ts,tsx,json,jsonc,css`.
@@ -254,9 +259,21 @@ test      → 1 file, 3 tests passed (apps/web/src/lib/utils/cn.test.ts)
 build     → Tasks: 3 successful, 3 total (web 21s, api ~5s, workers ~2s)
 ```
 
+After the Prisma wiring (apps/api only):
+
+```
+db:generate                → Generated Prisma Client v6.19.3
+prisma migrate dev         → Applied 20260428083308_initial_schema (1121 lines of SQL)
+typecheck (apps/api)       → 0 errors
+lint (apps/api)            → 11 files clean
+build (apps/api)           → dist/main.js + dist/prisma/{module,service}.js
+GET /health                → 200 {"status":"ok","timestamp":"…"}
+GET /health/db             → 200 {"status":"ok","db":"up","timestamp":"…"}
+SIGTERM                    → exit 143 + log "[PrismaService] Prisma disconnected"
+```
+
 ### What's not yet runnable
 
-- **`apps/api` dev** needs `DATABASE_URL` (any reachable Postgres) and `prisma migrate dev` once.
 - **`apps/workers` dev** needs `REDIS_URL` (any reachable Redis).
 - **`pnpm test:e2e`** needs `pnpm --filter web exec playwright install` to download Chromium.
 

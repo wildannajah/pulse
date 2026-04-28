@@ -13,6 +13,7 @@ async function bootstrap() {
     origin: config.get("WEB_ORIGIN", { infer: true }),
     credentials: true,
   });
+  app.enableShutdownHooks();
 
   const port = config.get("PORT", { infer: true });
   await app.listen(port);
