@@ -1,10 +1,10 @@
 {
   "extends": "@pulse/config/tsconfig/nestjs",
   "compilerOptions": {
-    "baseUrl": "./",
     "paths": {
       "@/*": ["./src/*"]
     },
+    "rootDir": "./src",
     "outDir": "./dist",
     "incremental": false
   },
