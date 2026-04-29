@@ -352,3 +352,139 @@ AES-256-GCM encryption (`apps/api/src/encryption/encryption.service.ts`) for enc
 
 **`apps/api`**: `AUTH_SECRET` (min 32 chars), `ENCRYPTION_KEY` (64 hex chars)
 **`apps/web`**: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `DATABASE_URL`
+
+---
+
+## tRPC end-to-end
+
+Added 2026-04-29. Lands a fully-typed RPC layer between `apps/web` and `apps/api`. Single router lives in `apps/api`, exposed at `POST /trpc/*path`. The `AppRouter` type crosses the workspace boundary via a type-only package; no runtime dependency between the apps.
+
+### Architecture
+
+```
+browser ──(same-origin)──▶ apps/web /api/trpc/[trpc]/route.ts
+                                           │
+                              attaches Authorization: Bearer <session-cookie>
+                                           ▼
+                                apps/api  /trpc/*path  (TrpcController)
+                                           │
+                              fetchRequestHandler → createTrpcContext
+                                           ▼
+                       { user, brand, brandIdHeader, prisma } → procedures
+```
+
+The browser never holds a bearer token. The Auth.js session cookie stays HTTP-only; `apps/web`'s server-side proxy reads it, validates with `auth()`, then mints `Authorization: Bearer <cookieValue>` for the upstream call. apps/api looks the cookie value up against the `Session` table — same flow as the existing REST guards.
+
+### Why `@pulse/api-types` instead of importing `apps/api` directly
+
+A new type-only package at `packages/api-types/` re-exports the `AppRouter` inferred type from `apps/api/src/trpc/app-router.ts`:
+
+```ts
+// packages/api-types/src/app-router-type.ts
+export type { AppRouter } from "../../../apps/api/src/trpc/app-router";
+```
+
+Why a separate package:
+- `apps/web` must not depend on `apps/api` at runtime — they deploy independently (Vercel + Railway).
+- The relative re-export keeps the type chain inside the workspace; pnpm symlinks let TS resolve it normally. No build step, no project references, no extra tooling.
+- Future routers (post, brand, oauth, …) just keep registering on the same `appRouter`; `@pulse/api-types` never changes.
+
+**Constraint:** every file in the `AppRouter` type chain (`app-router.ts`, `trpc.ts`, `trpc-context.ts`, `routers/*.ts`, `auth/session-resolver.ts`, `auth/brand-resolver.ts`) uses **relative imports only** — no `@/...` aliases. `apps/web`'s tsconfig can't resolve apps/api's path alias, so any alias-import in the chain breaks `pnpm typecheck` on the web side. The controller and module are NOT in the type chain — they can use whatever imports.
+
+The context type uses `PrismaClient` (not `PrismaService`) so the chain doesn't pull `@nestjs/common` into apps/web's resolution. `PrismaService extends PrismaClient`, so passing the NestJS-managed instance into a `PrismaClient`-typed context is sound at runtime.
+
+### Three procedure helpers
+
+`apps/api/src/trpc/trpc.ts` exports:
+
+| Helper | Use when… | After-middleware ctx narrowing |
+|---|---|---|
+| `publicProcedure` | endpoint must be reachable without auth (sign-up, public reads) | `user: User \| null`, `brand: Brand \| null` |
+| `protectedProcedure` | session required, brand irrelevant (e.g. `me`, list-my-workspaces) | `user: User`, `brand: Brand \| null` |
+| `brandProcedure` | session **and** an `x-brand-id` resolved to an accessible brand | `user: User`, `brand: Brand` |
+
+`brandProcedure` distinguishes its two failure modes:
+- header missing entirely → `BAD_REQUEST` (400) — client bug, fix the request.
+- header present but unresolved → `FORBIDDEN` (403) — security boundary, the user doesn't own that brand.
+
+The middleware narrows by spreading the now-non-null field into the next ctx: `next({ ctx: { ...ctx, user: ctx.user } })`. Procedures downstream see the narrowed type.
+
+### Resolver extraction (DRY guards + tRPC)
+
+The session-token lookup and brand-membership check used to live inline inside `SessionGuard` / `BrandScopeGuard`. They've been extracted to:
+- `apps/api/src/auth/session-resolver.ts` — `resolveSession({ authHeader, prisma })` returns `User | null`.
+- `apps/api/src/auth/brand-resolver.ts` — `resolveBrand({ brandIdHeader, user, prisma })` returns `Brand | null`.
+
+Both guards now delegate (and still throw their NestJS exceptions on null). The tRPC context factory calls the same resolvers. Single source of truth for "what counts as authenticated" and "what counts as accessing this brand". Adding a third consumer (worker job claiming a brand context, etc.) reuses the same functions.
+
+### Session-token transport
+
+**Chosen: server-side proxy.** `apps/web/src/app/api/trpc/[trpc]/route.ts` reads the Auth.js cookie (`__Secure-authjs.session-token` first, falling back to `authjs.session-token` for HTTP/dev), calls `auth()` to verify the session is live, then forwards to `${API_URL}/trpc/...` with `Authorization: Bearer <cookieValue>`.
+
+The session token never reaches JavaScript:
+- No `/api/auth/token` endpoint.
+- No localStorage / sessionStorage / cookie reads from the client.
+- Browser → apps/web is same-origin (`/api/trpc`); `httpBatchLink.url` doesn't even need `NEXT_PUBLIC_API_URL`.
+
+Trade-off: every tRPC call hops through Next's serverless layer. Fine for now (one hop, low latency, no cold-start concerns on Vercel for route handlers). If we later need direct browser → apps/api for streaming or perf, we can layer a second transport without changing the procedures.
+
+A new server-only env `API_URL` lives in `apps/web/.env.example`. `NEXT_PUBLIC_API_URL` stays available for direct dev tooling.
+
+### How to add a new feature router
+
+1. Create `apps/api/src/trpc/routers/<feature>-router.ts`. Use `protectedProcedure` or `brandProcedure`. Validate inputs with `z.object(...)`. Use only **relative imports** — no `@/...`.
+
+   ```ts
+   import { z } from "zod";
+   import { brandProcedure, router } from "../trpc";
+
+   export const postRouter = router({
+     create: brandProcedure
+       .input(z.object({ caption: z.string().min(1).max(2200) }))
+       .mutation(async ({ ctx, input }) => {
+         return ctx.prisma.post.create({
+           data: { caption: input.caption, brandId: ctx.brand.id, authorId: ctx.user.id },
+         });
+       }),
+   });
+   ```
+
+2. Register it in `apps/api/src/trpc/app-router.ts`:
+
+   ```ts
+   import { postRouter } from "./routers/post-router";
+   export const appRouter = router({ health: healthRouter, post: postRouter });
+   ```
+
+3. Use it from any client component — fully typed, autocomplete, Zod errors surface as `error.data.zodError`:
+
+   ```tsx
+   const create = trpc.post.create.useMutation();
+   create.mutate({ caption: "hello" });
+   ```
+
+No client codegen, no schema sync, no extra build step. The `AppRouter` type re-export updates automatically.
+
+### Smoke test
+
+`/app/dev/trpc-smoke` (gated by the existing `/app/*` middleware) renders `<TrpcSmoke />` with both procedures wired. The page is a Server Component that bootstraps `activeBrandId` from the user's first brand via Prisma; the client component sets the Zustand `useBrandStore` on mount.
+
+### Verification (from this session)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` (8 packages incl. `@pulse/api-types`) | ✅ all green |
+| `pnpm lint` | ✅ 97 files clean |
+| `pnpm test` | ✅ 18 tests pass (15 api + 3 web) |
+| `pnpm build` | ✅ all 3 apps; new routes `/api/trpc/[trpc]`, `/app/dev/trpc-smoke` registered |
+| API direct: `/trpc/health.me` valid Bearer | ✅ 200 `{ id, email }` |
+| API direct: `/trpc/health.brand` valid Bearer + brand | ✅ 200 `{ id, name }` |
+| API direct: `/trpc/health.brand` valid Bearer, missing `x-brand-id` | ✅ `BAD_REQUEST` (400) |
+| API direct: `/trpc/health.brand` valid Bearer, bogus `x-brand-id` | ✅ `FORBIDDEN` (403) |
+| Web proxy: `/api/trpc/health.me` no cookie | ✅ 401 `{"error":"Unauthenticated"}` |
+| Web proxy: `/api/trpc/health.me` with cookie | ✅ 200, identity payload |
+| Web proxy: `/api/trpc/health.brand` with cookie + brand | ✅ 200, brand payload |
+| Web proxy: `/api/trpc/health.brand` with cookie, no brand | ✅ tRPC `BAD_REQUEST` |
+| Web proxy: `/api/trpc/health.brand` with cookie + bogus brand | ✅ tRPC `FORBIDDEN` |
+
+Browser-flow check (sign in → `/app/dev/trpc-smoke` → see both queries succeed → spoof the store with a foreign brand id and confirm `FORBIDDEN`) is best done manually in a real browser; the curl-via-cookie matrix above already exercises every path the React Query client would take.

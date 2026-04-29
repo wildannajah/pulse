@@ -22,16 +22,26 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 - [x] Health endpoints (`/health`, `/health/db`)
 - [x] Design spec document (13 sections)
 - [x] Dashboard wireframe (desktop, interactive)
+- [x] **Auth.js v5 wired in `apps/web` with custom Prisma adapter (schema field mapping)**
+- [x] **Three providers: Credentials (bcrypt 12 rounds), Google OAuth, Resend magic link**
+- [x] **Database session strategy with JWT encode override for Credentials compatibility**
+- [x] **Sign-in / sign-up / verify-email pages with React Hook Form + Zod**
+- [x] **Middleware protecting `/app/*` routes**
+- [x] **`bootstrapWorkspace()` server action — atomic Workspace + Member + default Brand on first sign-in, idempotent**
+- [x] **`SessionGuard` — Bearer token validation against sessions table, expiry check**
+- [x] **`BrandScopeGuard` — `x-brand-id` header → workspace membership + brandAccess array enforcement**
+- [x] **`@CurrentUser()` and `@CurrentBrand()` param decorators**
+- [x] **`EncryptionService` (AES-256-GCM) for OAuth token storage**
+- [x] **`/health/me` and `/health/brand` smoke endpoints**
+- [x] **Vitest tests for both guards (5 critical paths covered, including cross-tenant rejection)**
+- [x] **`VerificationToken` model + `add_verification_tokens` migration applied**
 
 ### Remaining foundation work
-- [ ] Auth.js wired into NestJS with Prisma adapter (sessions, users, oauth_accounts persist)
-- [ ] `SessionGuard` rejects unauthenticated requests
-- [ ] `BrandScopeGuard` verifies the user has a `WorkspaceMember` row for the requested brand's workspace
-- [ ] `@CurrentUser()` and `@CurrentBrand()` param decorators
-- [ ] Token encryption service (AES-256-GCM) for `connected_accounts.accessToken` at rest
-- [ ] `tRPC` server wired into Nest (router context with user + brand)
-- [ ] `tRPC` client wired into Next.js (TanStack Query integration)
-- [ ] `BullMQ` queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync`
+- [ ] tRPC server wired into Nest (router context with user + brand, three procedure helpers)
+- [ ] tRPC client wired into Next.js (TanStack Query integration, session token transport)
+- [ ] `@pulse/api-types` shared package for type-only AppRouter export
+- [ ] Session token transport from Auth.js cookie to API (server-action proxy or token endpoint)
+- [ ] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync`
 - [ ] `JobLog` writes wired into worker lifecycle (start, success, failure)
 - [ ] Sentry wired in `apps/api` and `apps/workers` with `brandId` + `platform` tags
 - [ ] Cloudflare R2 (or S3) bucket configured for media uploads
@@ -49,6 +59,7 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 - [ ] White-labeling — Phase 1 or Phase 3?
 - [ ] Data retention — how long do we keep analytics history?
 - [ ] GDPR / CCPA — DPA, data export, right-to-delete
+- [ ] Auth account linking — currently auto-link via `allowDangerousEmailAccountLinking: true` (Google). Confirm this is intentional or switch to manual-link mode.
 
 ---
 
@@ -57,14 +68,14 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly tagged Phase 1. Goal: a usable product end-to-end for a solo creator.
 
 ### 1A — User auth & multi-brand workspace
-- [ ] Sign up / log in flows (frontend)
-- [ ] Email verification flow
+- [x] Sign up / log in flows (frontend) — *partially done as part of Phase 0 auth*
+- [x] Email verification flow *(via Resend magic link)*
 - [ ] Password reset flow
-- [ ] Workspace creation on first login (Personal type)
-- [ ] Default Brand created with workspace
+- [x] Workspace creation on first login (Personal type)
+- [x] Default Brand created with workspace
 - [ ] Workspace switcher UI (header dropdown)
 - [ ] Brand switcher UI (separate from workspace switcher)
-- [ ] `useBrandStore()` Zustand store + brand-id propagation in API calls
+- [ ] `useBrandStore()` Zustand store + brand-id propagation in API calls *(stub will land with tRPC wiring)*
 - [ ] User profile settings page
 - [ ] Account deletion (soft delete + queued hard-delete after grace period)
 
@@ -73,7 +84,7 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [ ] `BasePlatformAdapter` interface — `publish()`, `fetchAnalytics()`, `refreshToken()`, `fetchInbox()`, `fetchProfile()`
 - [ ] Platform adapter registry + factory
 - [ ] OAuth callback route (`/api/auth/connect/[platform]/callback`)
-- [ ] Encrypted token write to `connected_accounts`
+- [ ] Encrypted token write to `connected_accounts` *(EncryptionService ready)*
 - [ ] Connection status surfaced in UI (active / expired / revoked / error)
 - [ ] Disconnect flow (revoke on platform side + delete from DB)
 - [ ] Token refresh BullMQ job (hourly, refresh tokens expiring < 24h)
@@ -151,7 +162,8 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [ ] Usage tracking via `UsageRecord` for plan limits
 
 ### 1I — Phase 1 cross-cutting
-- [ ] Email service wired (Resend or SendGrid) — verification, password reset, post-failure alerts
+- [x] Email service wired (Resend) — verification, magic link
+- [ ] Email service: post-failure alerts, password-reset, notification emails
 - [ ] Notification system end-to-end (in-app + email)
 - [ ] Audit log writes for sensitive actions (account connect, post publish, user invited)
 - [ ] Onboarding tour for new users
@@ -298,10 +310,12 @@ These run in parallel with Phase 1–3 dev. Don't ship without them.
 
 ## Quick scoreboard
 
-- **Foundation (Phase 0):** 12 of ~25 done
-- **Phase 1:** 0 of ~85 done
+- **Foundation (Phase 0):** 25 of ~38 done — auth + brand scoping just landed
+- **Phase 1:** 6 of ~85 done — auth-related items checked off as side-effect of Phase 0 work
 - **Phase 2:** 0 of ~40 done
 - **Phase 3:** 0 of ~30 done
 - **Pre-launch:** 0 of ~12 done
 
-Total surface area: ~190 trackable items. Roughly half are "build the feature," roughly half are "wire the plumbing around it." Phase 1 is by far the biggest chunk because the PRD's must-haves span all 7 platforms × every feature area.
+Total surface area: ~205 trackable items. Foundation is two-thirds through — tRPC wiring, BullMQ queues, and `@pulse/ui` primitives are the remaining big chunks before feature work can move quickly.
+
+**Next up:** tRPC wiring (router context with user + brand). Once that lands, every feature procedure becomes a ~30-line addition instead of a fresh fetch + types boilerplate dance.

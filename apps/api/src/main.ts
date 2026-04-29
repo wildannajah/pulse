@@ -12,6 +12,7 @@ async function bootstrap() {
   app.enableCors({
     origin: config.get("WEB_ORIGIN", { infer: true }),
     credentials: true,
+    allowedHeaders: ["authorization", "content-type", "x-brand-id"],
   });
   app.enableShutdownHooks();
 

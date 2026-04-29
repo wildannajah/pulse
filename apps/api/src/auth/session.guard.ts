@@ -8,6 +8,7 @@ import type { Request } from "express";
 
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { PrismaService } from "../prisma/prisma.service";
+import { resolveSession } from "./session-resolver";
 
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -17,32 +18,12 @@ export class SessionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const authHeader = request.headers.authorization;
 
-    if (!authHeader) {
-      throw new UnauthorizedException("Missing authorization header");
+    const user = await resolveSession({ authHeader, prisma: this.prisma });
+    if (!user) {
+      throw new UnauthorizedException("Invalid or missing session");
     }
 
-    const parts = authHeader.split(" ");
-    if (parts.length !== 2 || parts[0] !== "Bearer") {
-      throw new UnauthorizedException("Invalid authorization header format");
-    }
-
-    const token = parts[1];
-
-    const session = await this.prisma.session.findUnique({
-      where: { sessionToken: token },
-      include: { user: true },
-    });
-
-    if (!session) {
-      throw new UnauthorizedException("Invalid session token");
-    }
-
-    if (session.expiresAt < new Date()) {
-      throw new UnauthorizedException("Session expired");
-    }
-
-    (request as unknown as Record<string, unknown>).user = session.user;
-
+    (request as unknown as Record<string, unknown>).user = user;
     return true;
   }
 }

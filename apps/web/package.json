@@ -18,6 +18,7 @@
     "@auth/core": "^0.34.3",
     "@hookform/resolvers": "^3.10.0",
     "@prisma/client": "^6.19.3",
+    "@pulse/api-types": "workspace:*",
     "@pulse/schemas": "workspace:*",
     "@pulse/types": "workspace:*",
     "@pulse/ui": "workspace:*",
@@ -40,6 +41,7 @@
     "react-hook-form": "^7.74.0",
     "resend": "^6.12.2",
     "sonner": "^2.0.7",
+    "superjson": "^2.2.2",
     "tailwind-merge": "^2.6.1",
     "zod": "^3.25.76",
     "zustand": "^5.0.12"

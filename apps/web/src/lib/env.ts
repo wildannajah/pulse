@@ -8,6 +8,7 @@ export const envSchema = z.object({
   EMAIL_FROM: z.string().email(),
   DATABASE_URL: z.string().url(),
   NEXT_PUBLIC_API_URL: z.string().url().default("http://localhost:3001"),
+  API_URL: z.string().url().default("http://localhost:3001"),
 });
 
 export type Env = z.infer<typeof envSchema>;

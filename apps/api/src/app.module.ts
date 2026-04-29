@@ -6,6 +6,7 @@ import { validateEnv } from "./config/env-schema";
 import { EncryptionModule } from "./encryption/encryption.module";
 import { HealthModule } from "./health/health.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { TrpcModule } from "./trpc/trpc.module";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     AuthModule,
     EncryptionModule,
     HealthModule,
+    TrpcModule,
   ],
 })
 export class AppModule {}
