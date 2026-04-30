@@ -4,6 +4,8 @@ A complete, sequenced checklist of everything between today and a shipped Phase 
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
+> **Last reviewed: 2026-04-30.** UI work is currently blocked on the design system landing. Backend work (platform adapters, OAuth flows, BullMQ workers, tRPC procedures, validation schemas, AI provider integration) proceeds in parallel — when the design system arrives, UI becomes glue work against an already-built API surface.
+
 ---
 
 ## Phase 0 — Foundation (in progress)
@@ -35,13 +37,17 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 - [x] **`/health/me` and `/health/brand` smoke endpoints**
 - [x] **Vitest tests for both guards (5 critical paths covered, including cross-tenant rejection)**
 - [x] **`VerificationToken` model + `add_verification_tokens` migration applied**
+- [x] **tRPC v11 server wired into Nest** (`TrpcController` with `@All("*path")`, fetch adapter bridge, `createTrpcContext` reuses `resolveSession` + `resolveBrand` resolvers — DRY with guards)
+- [x] **Three procedure helpers**: `publicProcedure` / `protectedProcedure` (session) / `brandProcedure` (session + brand, distinguishes `BAD_REQUEST` for missing header vs `FORBIDDEN` for inaccessible brand)
+- [x] **tRPC client wired into Next.js** (`trpc.Provider` + `QueryClientProvider` in `providers.tsx`, `httpBatchLink` with superjson)
+- [x] **`@pulse/api-types` shared package** (type-only `AppRouter` re-export so `apps/web` doesn't depend on `apps/api` at runtime)
+- [x] **Session-token transport via server-side proxy** (`/api/trpc/[trpc]/route.ts` reads HTTP-only cookie, mints `Authorization: Bearer` for upstream — token never reaches JS)
+- [x] **`useBrandStore()` Zustand store** with localStorage persistence; brand id sent as `x-brand-id` header by tRPC client
+- [x] **API deployed to Railway** via multi-stage Dockerfile
+- [x] **Web deployed to Vercel** with Prisma generate in build step
 
 ### Remaining foundation work
-- [ ] tRPC server wired into Nest (router context with user + brand, three procedure helpers)
-- [ ] tRPC client wired into Next.js (TanStack Query integration, session token transport)
-- [ ] `@pulse/api-types` shared package for type-only AppRouter export
-- [ ] Session token transport from Auth.js cookie to API (server-action proxy or token endpoint)
-- [ ] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync`
+- [ ] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync` (only `post-publish` stub exists)
 - [ ] `JobLog` writes wired into worker lifecycle (start, success, failure)
 - [ ] Sentry wired in `apps/api` and `apps/workers` with `brandId` + `platform` tags
 - [ ] Cloudflare R2 (or S3) bucket configured for media uploads
@@ -50,16 +56,36 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 - [ ] Storybook deployed (Chromatic or Vercel) for design review
 - [ ] Wireframes for the other 4 core screens (Composer, Calendar, Inbox, Analytics)
 - [ ] Component inventory extracted from the design spec
-- [ ] `@pulse/ui` populated with the first ~10 shared primitives (Button, Input, Card, etc.)
+- [ ] `@pulse/ui` populated with the first ~10 shared primitives (Button, Input, Card, etc.) — *blocked on design system*
+- [ ] `packages/types/platform-constraints.ts` — per-platform char limits, hashtag caps, media specs from PRD §5 as single source of truth
+
+### Product analytics & metrics tracking
+
+Required to measure the success metrics PRD §3.2 commits us to (DAU, post-scheduling adoption, analytics engagement, team adoption, 30-day retention, NPS). **Must be wired before Phase 1 launch** — instrumenting after the fact loses the launch baseline.
+
+- [ ] Choose product-analytics provider (PostHog vs Amplitude vs Mixpanel vs self-hosted) — *open question*
+- [ ] Provider client SDK in `apps/web` (cookie consent + opt-out for GDPR)
+- [ ] Provider server SDK in `apps/api` (server-side events for actions we don't want to trust the client for)
+- [ ] Event taxonomy doc — minimum coverage for PRD §3.2:
+  - `user.signed_up`, `user.signed_in`, `user.session_active` (DAU)
+  - `post.scheduled`, `post.published` (scheduling adoption — target 5/week)
+  - `analytics.viewed` (analytics engagement — target weekly view by 60%)
+  - `team.member_invited`, `team.member_joined` (team adoption — target 2+ members)
+  - `account.connected`, `account.disconnected` (per-platform connection funnel)
+  - `nps.surveyed`, `nps.responded` (NPS — target ≥40 within 6 months)
+- [ ] In-app NPS survey component (Delighted, Wootric, or DIY)
+- [ ] Cohort retention dashboard (30-day target ≥65%)
+- [ ] Reverse-ETL or warehouse export for deeper analysis (BigQuery/Snowflake) — *defer if PostHog is the choice; their built-in tools cover most of it*
 
 ### Open product questions (resolve before Phase 1 ships)
-- [ ] Pricing model — freemium tiers, per-seat, per-account?
-- [ ] Mobile — responsive web only, or native app on the roadmap?
-- [ ] AI provider — Claude API, OpenAI, both?
-- [ ] White-labeling — Phase 1 or Phase 3?
-- [ ] Data retention — how long do we keep analytics history?
-- [ ] GDPR / CCPA — DPA, data export, right-to-delete
-- [ ] Auth account linking — currently auto-link via `allowDangerousEmailAccountLinking: true` (Google). Confirm this is intentional or switch to manual-link mode.
+- [ ] **Pricing model** — freemium tiers, per-seat, per-account?
+- [x] **Mobile** — *resolved per PRD §8: responsive web only for v1, native deferred*
+- [ ] **AI provider** — Claude API, OpenAI, both? *PRD §9 assumes Claude; needs final call before 1H starts*
+- [ ] **Product-analytics provider** — PostHog / Amplitude / Mixpanel / self-hosted?
+- [ ] **White-labeling** — Phase 1 or Phase 3?
+- [ ] **Data retention** — how long do we keep analytics history?
+- [ ] **GDPR / CCPA** — DPA, data export, right-to-delete
+- [x] **Auth account linking** — *resolved: `allowDangerousEmailAccountLinking` removed (commit `8b2729b`); manual link mode is the contract*
 
 ---
 
@@ -67,16 +93,19 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 
 Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly tagged Phase 1. Goal: a usable product end-to-end for a solo creator.
 
+> **Currently unblocked (proceed in parallel with design):** 1B (OAuth + adapters, all backend), 1C backend half (worker, queue, validation schemas), 1F worker (`inbox-sync`), 1G worker (`analytics-sync`), 1H (AI provider integration once decided).
+> **Waits for design system:** every "UI", "view", "card", "page", "modal", "drawer" item below.
+
 ### 1A — User auth & multi-brand workspace
 - [x] Sign up / log in flows (frontend) — *partially done as part of Phase 0 auth*
 - [x] Email verification flow *(via Resend magic link)*
 - [ ] Password reset flow
 - [x] Workspace creation on first login (Personal type)
 - [x] Default Brand created with workspace
-- [ ] Workspace switcher UI (header dropdown)
-- [ ] Brand switcher UI (separate from workspace switcher)
-- [ ] `useBrandStore()` Zustand store + brand-id propagation in API calls *(stub will land with tRPC wiring)*
-- [ ] User profile settings page
+- [x] `useBrandStore()` Zustand store + brand-id propagation in API calls *(landed with tRPC wiring)*
+- [ ] Workspace switcher UI (header dropdown) — *waits for design*
+- [ ] Brand switcher UI (separate from workspace switcher) — *waits for design*
+- [ ] User profile settings page — *waits for design*
 - [ ] Account deletion (soft delete + queued hard-delete after grace period)
 
 ### 1B — OAuth Platform Connect (all 7 platforms)
@@ -276,7 +305,10 @@ Could-haves. Goal: usable by agencies managing many clients.
 - [ ] Saved dashboard layouts per user
 - [ ] Custom date-range presets
 
-### 3G — Programmatic access
+### 3G — Programmatic access *(NOT in PRD — needs scope decision)*
+
+> ⚠️ **Out of PRD scope as of v1.0.** Schema has `ApiKey` table (someone modeled it), but PRD §4–§7 doesn't mention a public API or webhooks anywhere. Either (a) drop this section, or (b) write a PRD addendum justifying the addition before building. Recommend (a) for v1 — agencies can request via support, real demand can drive a v1.1 addendum. Leaving items here for traceability only; **do not build until a PRD update lands.**
+
 - [ ] `ApiKey` model wired with hashing + scopes
 - [ ] API key management UI
 - [ ] REST API documentation site
@@ -310,12 +342,23 @@ These run in parallel with Phase 1–3 dev. Don't ship without them.
 
 ## Quick scoreboard
 
-- **Foundation (Phase 0):** 25 of ~38 done — auth + brand scoping just landed
-- **Phase 1:** 6 of ~85 done — auth-related items checked off as side-effect of Phase 0 work
+- **Foundation (Phase 0):** 33 of ~48 done — tRPC end-to-end, deployment, and Zustand brand store landed since last review; product-analytics tracking section added (9 items)
+- **Phase 1:** 7 of ~85 done — `useBrandStore` checked off as side-effect of tRPC wiring
 - **Phase 2:** 0 of ~40 done
-- **Phase 3:** 0 of ~30 done
+- **Phase 3:** 0 of ~30 done (3G "Programmatic access" flagged as out-of-PRD; 4 items there don't count toward Phase 3 burn-down)
 - **Pre-launch:** 0 of ~12 done
 
-Total surface area: ~205 trackable items. Foundation is two-thirds through — tRPC wiring, BullMQ queues, and `@pulse/ui` primitives are the remaining big chunks before feature work can move quickly.
+Total surface area: ~215 trackable items. Foundation is ~85% complete — remaining chunks are BullMQ queues (3 of 4 still stubs), Sentry, R2/media storage, CI, Storybook deploy, and `@pulse/ui` primitives (the last is design-system-blocked).
 
-**Next up:** tRPC wiring (router context with user + brand). Once that lands, every feature procedure becomes a ~30-line addition instead of a fresh fetch + types boilerplate dance.
+**Next up while design is in flight (in priority order):**
+
+1. **Decide AI provider + product-analytics provider** (two open questions above) — unblocks 1H and the Phase 0 metrics-tracking section respectively
+2. **`BasePlatformAdapter` interface + Twitter/X end-to-end** (1B) — proves the pattern, lets the other 6 platforms fan out
+3. **`packages/types/platform-constraints.ts`** — char limits / hashtag caps / media specs as one source of truth (consumed by composer validation later)
+4. **`token-refresh` BullMQ worker** — depends on adapters being defined; prevents Phase 1 silent failures
+5. **`post-publish` worker** filled in beyond the stub — wire it to the adapter registry
+6. **`inbox-sync` and `analytics-sync` workers** — same pattern, run on cron via BullMQ repeat jobs
+7. **tRPC procedures** for `connectedAccount.*`, `post.*`, `inbox.*`, `analytics.*`, `aiGeneration.*` — define the contract; UI later just calls these
+8. **Wire chosen analytics provider** + minimum event taxonomy — instrument as features land, not in retrospect
+
+Every item in this list is server-only, fully testable via Vitest + tRPC's `appRouter.createCaller(ctx)` pattern, and produces a complete API surface that the eventual UI consumes as glue.
