@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="200" height="250">
+  <defs>
+    
+    <linearGradient id="bubble-grad" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#FFC8B2"></stop>
+      <stop offset="30%" stop-color="#F2B8F2"></stop>
+      <stop offset="65%" stop-color="#C8B0F8"></stop>
+      <stop offset="100%" stop-color="#A0ECE8"></stop>
+    </linearGradient>
+    
+    <linearGradient id="icon-grad" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#FFC8B2"></stop>
+      <stop offset="30%" stop-color="#F2B8F2"></stop>
+      <stop offset="65%" stop-color="#C8B0F8"></stop>
+      <stop offset="100%" stop-color="#A0ECE8"></stop>
+    </linearGradient>
+  </defs>
+
+  
+  <path d="&#xA;    M 46,4&#xA;    H 154&#xA;    Q 180,4 180,30&#xA;    V 90&#xA;    Q 180,116 154,116&#xA;    H 74&#xA;    L 28,148&#xA;    L 50,116&#xA;    H 46&#xA;    Q 20,116 20,90&#xA;    V 30&#xA;    Q 20,4 46,4&#xA;    Z&#xA;  " fill="url(#bubble-grad)"></path>
+
+  
+  <polyline points="28,60 52,60 61,47 68,75 74,22 83,60 118,60" fill="none" stroke="white" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+
+  
+  <text x="100" y="202" font-family="&#39;Nunito&#39;, &#39;Poppins&#39;, &#39;Outfit&#39;, system-ui, sans-serif" font-size="50" font-weight="700" fill="#5A5A8E" text-anchor="middle" letter-spacing="-0.5">Pulse</text>
+</svg>
