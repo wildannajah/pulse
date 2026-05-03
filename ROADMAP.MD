@@ -49,19 +49,16 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 ### Remaining foundation work
 - [ ] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync` (only `post-publish` stub exists)
 - [ ] `JobLog` writes wired into worker lifecycle (start, success, failure)
-- [ ] Sentry wired in `apps/api` and `apps/workers` with `brandId` + `platform` tags
-- [ ] Cloudflare R2 (or S3) bucket configured for media uploads
-- [ ] Rate limiting on auth + public endpoints
-- [ ] CI: typecheck + lint + test + build on every PR
-- [ ] Storybook deployed (Chromatic or Vercel) for design review
 - [ ] Wireframes for the other 4 core screens (Composer, Calendar, Inbox, Analytics)
 - [ ] Component inventory extracted from the design spec
 - [ ] `@pulse/ui` populated with the first ~10 shared primitives (Button, Input, Card, etc.) — *blocked on design system*
 - [ ] `packages/types/platform-constraints.ts` — per-platform char limits, hashtag caps, media specs from PRD §5 as single source of truth
 
-### Product analytics & metrics tracking
+> Infra-flavored items (Sentry, R2, rate limiting, CI, Storybook deploy) moved to the dedicated **Infrastructure** section below.
 
-Required to measure the success metrics PRD §3.2 commits us to (DAU, post-scheduling adoption, analytics engagement, team adoption, 30-day retention, NPS). **Must be wired before Phase 1 launch** — instrumenting after the fact loses the launch baseline.
+### Product analytics & metrics tracking *(ON HOLD)*
+
+> ⏸️ **Deferred as of 2026-04-30.** Conscious trade-off: we ship Phase 1 without instrumentation and accept that PRD §3.2 success metrics (DAU, scheduling adoption, analytics engagement, team adoption, 30-day retention, NPS) will be unmeasurable from launch day until this section is picked back up. Revisit before any board / investor reporting is required, or before any optimization work that depends on funnel data. Items kept here so the dependency is visible — **do not start until reactivated.**
 
 - [ ] Choose product-analytics provider (PostHog vs Amplitude vs Mixpanel vs self-hosted) — *open question*
 - [ ] Provider client SDK in `apps/web` (cookie consent + opt-out for GDPR)
@@ -81,11 +78,57 @@ Required to measure the success metrics PRD §3.2 commits us to (DAU, post-sched
 - [ ] **Pricing model** — freemium tiers, per-seat, per-account?
 - [x] **Mobile** — *resolved per PRD §8: responsive web only for v1, native deferred*
 - [ ] **AI provider** — Claude API, OpenAI, both? *PRD §9 assumes Claude; needs final call before 1H starts*
-- [ ] **Product-analytics provider** — PostHog / Amplitude / Mixpanel / self-hosted?
+- [~] **Product-analytics provider** — PostHog / Amplitude / Mixpanel / self-hosted? *Decision deferred; Phase 0 analytics section is ON HOLD*
 - [ ] **White-labeling** — Phase 1 or Phase 3?
 - [ ] **Data retention** — how long do we keep analytics history?
 - [ ] **GDPR / CCPA** — DPA, data export, right-to-delete
 - [x] **Auth account linking** — *resolved: `allowDangerousEmailAccountLinking` removed (commit `8b2729b`); manual link mode is the contract*
+
+---
+
+## Infrastructure
+
+Cuts across all phases. Some items block Phase 1 launch directly; others should land before paid customers exist. Operational items (status page, on-call, runbooks) live in the **Pre-launch** section below.
+
+### Already provisioned
+- [x] **Web hosting** — Vercel (auto-deploy on push to `main`)
+- [x] **API hosting** — Railway via multi-stage Dockerfile
+- [x] **Postgres** — Railway managed; initial migration applied (~30 tables)
+- [x] **Redis** — Railway managed; TCP proxy for local BullMQ access
+- [x] **Email** — Resend (magic link + verification flowing)
+- [x] **TLS / SSL** — automatic on Vercel + Railway auto-domains
+
+### Hard launch blockers (Phase 1 cannot function without these)
+- [ ] **Workers deployment** — host `apps/workers` as a long-running Railway service (recommend: separate service, same project as the API so it shares the Redis private URL). Without this, scheduled posts never publish, tokens never refresh, analytics never sync, inbox never updates.
+- [ ] **Cloudflare R2 (or S3) bucket** for media uploads — composer can't accept media without it. R2 preferred (zero egress fees) for a media-heavy app.
+- [ ] **Signed-URL upload flow** — server-issued upload URLs so client never sees R2 credentials
+
+### Strongly recommended for launch (beta survivable without; not GA-ready without)
+- [ ] **Sentry** wired in `apps/api` and `apps/workers` with `brandId` + `platform` tags (per CLAUDE.md spec) — first 3am production failure makes the case
+- [ ] **CI pipeline** — typecheck + lint + test + build on every PR before deploy. Currently a broken `main` push can ship straight to prod.
+- [ ] **Rate limiting** on auth + public endpoints — bot-signup floods, brute-force, inbox spam unprotected today
+- [ ] **Backup verification** — Railway has automated Postgres backups; we've never tested restore. Restore once, document the procedure.
+- [ ] **Real production domain + DNS** — improves email deliverability dramatically (Resend on a `*.resend.dev` subdomain works but lands in spam more often) and makes OAuth callbacks stable across platform reorgs. Vercel/Railway auto-domains technically work — Auth.js cookies, OAuth, HTTPS all function. But: looks like a hobby project, hurts trust, and emails go to spam.
+- [ ] **Environment separation** — local dev currently points at the Railway "production" DB. There is no staging. Survivable for a small beta if you're careful, but every migration / data experiment touches the live database. Strategies:
+  - Vercel preview deploys + a separate Railway "staging" stack — best
+  - Single env, gate features with flags — cheapest
+  - Skip staging, use feature branches — fragile
+- [ ] **Secrets management decision** — CLAUDE.md says "use Doppler" but currently env vars live in Railway + Vercel directly. Either adopt Doppler or update CLAUDE.md to match reality.
+- [ ] **Log aggregation** — Railway and Vercel logs each live in their own dashboard. Aggregate via Axiom / Better Stack / Logtail so a single search spans all services.
+- [ ] **Uptime monitoring** — external pinger (Better Uptime, Checkly) on `/health` and `/health/db` with on-call alerts
+- [ ] **Storybook deployed** (Chromatic or Vercel) for design review
+
+### Nice-to-have / Phase 2+
+- [ ] **CDN strategy** — R2 has built-in CDN for public buckets; if we need something fancier (image transforms, signed access for private media) consider Cloudflare Images
+- [ ] **WAF / DDoS** — Cloudflare in front of Vercel + Railway, or Vercel's built-in protections (decide based on attack surface)
+- [ ] **Performance monitoring** — Vercel has Speed Insights; api side could use Sentry's Performance product
+- [ ] **Cost monitoring + budget alerts** — Railway + Vercel + Resend + R2 + (eventual) AI provider all bill independently
+
+### Open infra questions
+- [ ] **Workers hosting** — Railway separate service vs Render vs Fly?
+- [ ] **Production domain name** — what is it? (Affects everything in the launch-blocking list)
+- [ ] **Staging strategy** — three patterns above, pick one
+- [ ] **Secrets management** — Doppler vs platform vars (and update CLAUDE.md either way)
 
 ---
 
@@ -342,23 +385,25 @@ These run in parallel with Phase 1–3 dev. Don't ship without them.
 
 ## Quick scoreboard
 
-- **Foundation (Phase 0):** 33 of ~48 done — tRPC end-to-end, deployment, and Zustand brand store landed since last review; product-analytics tracking section added (9 items)
+- **Foundation (Phase 0):** 33 of ~34 active done — only feature-adjacent foundation items remain (BullMQ queues, JobLog wiring, design wireframes, `@pulse/ui` primitives, platform-constraints.ts); product-analytics section (9 items) on hold and not counted
+- **Infrastructure:** 6 of ~22 done — hosting + DB + Redis + email already provisioned; only 3 *true* launch blockers remain (workers deployment, R2 bucket, signed-URL upload flow); rest are "strongly recommended" but beta-survivable
 - **Phase 1:** 7 of ~85 done — `useBrandStore` checked off as side-effect of tRPC wiring
 - **Phase 2:** 0 of ~40 done
 - **Phase 3:** 0 of ~30 done (3G "Programmatic access" flagged as out-of-PRD; 4 items there don't count toward Phase 3 burn-down)
 - **Pre-launch:** 0 of ~12 done
 
-Total surface area: ~215 trackable items. Foundation is ~85% complete — remaining chunks are BullMQ queues (3 of 4 still stubs), Sentry, R2/media storage, CI, Storybook deploy, and `@pulse/ui` primitives (the last is design-system-blocked).
+Total surface area: ~215 trackable items (split across new Infrastructure bucket). Foundation is ~85% complete — remaining chunks are BullMQ queues (3 of 4 still stubs), Sentry, R2/media storage, CI, Storybook deploy, and `@pulse/ui` primitives (the last is design-system-blocked).
 
 **Next up while design is in flight (in priority order):**
 
-1. **Decide AI provider + product-analytics provider** (two open questions above) — unblocks 1H and the Phase 0 metrics-tracking section respectively
+1. **`packages/types/platform-constraints.ts`** — char limits / hashtag caps / media specs as one source of truth (consumed by composer validation later). 1-hour win, no decisions needed.
 2. **`BasePlatformAdapter` interface + Twitter/X end-to-end** (1B) — proves the pattern, lets the other 6 platforms fan out
-3. **`packages/types/platform-constraints.ts`** — char limits / hashtag caps / media specs as one source of truth (consumed by composer validation later)
+3. **Decide AI provider** (open question above) — unblocks 1H Caption Generator
 4. **`token-refresh` BullMQ worker** — depends on adapters being defined; prevents Phase 1 silent failures
 5. **`post-publish` worker** filled in beyond the stub — wire it to the adapter registry
 6. **`inbox-sync` and `analytics-sync` workers** — same pattern, run on cron via BullMQ repeat jobs
 7. **tRPC procedures** for `connectedAccount.*`, `post.*`, `inbox.*`, `analytics.*`, `aiGeneration.*` — define the contract; UI later just calls these
-8. **Wire chosen analytics provider** + minimum event taxonomy — instrument as features land, not in retrospect
+
+> Product-analytics provider decision and event-taxonomy instrumentation are explicitly **deferred** — see Phase 0 "Product analytics & metrics tracking" callout. PRD §3.2 success metrics will not be measurable at launch.
 
 Every item in this list is server-only, fully testable via Vitest + tRPC's `appRouter.createCaller(ctx)` pattern, and produces a complete API surface that the eventual UI consumes as glue.
