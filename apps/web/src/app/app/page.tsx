@@ -1,13 +1,12 @@
+import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { Plus } from "lucide-react";
 import Link from "next/link";
-
 import { ActivityFeed } from "@/components/app/activity-feed";
 import { PageHeader } from "@/components/app/page-header";
 import { PostCard } from "@/components/app/post-card";
 import { Button } from "@/components/ui/button";
 import { MOCK_PLATFORM_FOLLOWERS, MOCK_POSTS } from "@/lib/mock-data";
-import { PLATFORM_LIST, PLATFORM_META } from "@/lib/platform-meta";
 
 const STAT_CARDS = [
   { label: "Total followers", value: "143.4k", delta: "+2.1%", up: true as const },
@@ -57,7 +56,7 @@ export default function DashboardPage() {
           <div className="mb-3.5 text-[13px] font-semibold text-foreground">Platform overview</div>
           <div className="grid grid-cols-7 gap-2">
             {PLATFORM_LIST.map((p) => {
-              const meta = PLATFORM_META[p as Platform];
+              const meta = PLATFORM_CONSTRAINTS[p as Platform];
               return (
                 <div
                   key={p}

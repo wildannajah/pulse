@@ -13,6 +13,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
+  "dependencies": {
+    "@pulse/types": "workspace:*"
+  },
   "devDependencies": {
     "@pulse/config": "workspace:*",
     "@types/react": "^19.0.0",

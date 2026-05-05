@@ -1,5 +1,6 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import {
   Check,
@@ -14,12 +15,10 @@ import {
   Search,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-
 import { PageHeader } from "@/components/app/page-header";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { MOCK_POSTS, type MockPost, type PostStatus } from "@/lib/mock-data";
-import { PLATFORM_LIST, PLATFORM_META } from "@/lib/platform-meta";
 import { cn } from "@/lib/utils/cn";
 
 type StatusFilter = PostStatus | "all";
@@ -112,7 +111,7 @@ export default function PostsPage() {
             All platforms
           </ChipBtn>
           {PLATFORM_LIST.slice(0, 4).map((p) => {
-            const m = PLATFORM_META[p];
+            const m = PLATFORM_CONSTRAINTS[p];
             const active = platformFilter === p;
             return (
               <button
@@ -266,7 +265,7 @@ function PostGridCard({
   const [liked, setLiked] = useState(false);
   const [localLikes, setLocalLikes] = useState(post.likes);
   const [activePlatform, setActivePlatform] = useState<Platform>(post.platforms[0]!);
-  const meta = PLATFORM_META[activePlatform];
+  const meta = PLATFORM_CONSTRAINTS[activePlatform];
 
   return (
     <div
@@ -308,7 +307,7 @@ function PostGridCard({
       {post.platforms.length > 1 ? (
         <div className="flex flex-wrap gap-1 px-2.5 pt-2">
           {post.platforms.map((plat) => {
-            const m = PLATFORM_META[plat];
+            const m = PLATFORM_CONSTRAINTS[plat];
             const active = activePlatform === plat;
             return (
               <button

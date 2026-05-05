@@ -1,14 +1,13 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { Check, Reply, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-
 import { PageHeader } from "@/components/app/page-header";
 import { PlatformBadge } from "@/components/app/platform-badge";
 import { Button } from "@/components/ui/button";
 import { MOCK_ACTIVITY, type MockActivityType } from "@/lib/mock-data";
-import { PLATFORM_LIST, PLATFORM_META } from "@/lib/platform-meta";
 import { cn } from "@/lib/utils/cn";
 
 type TypeFilter = MockActivityType | "all";
@@ -130,7 +129,7 @@ export default function ActivityPage() {
             All platforms
           </button>
           {PLATFORM_LIST.slice(0, 4).map((p) => {
-            const m = PLATFORM_META[p];
+            const m = PLATFORM_CONSTRAINTS[p];
             const active = platformFilter === p;
             return (
               <button

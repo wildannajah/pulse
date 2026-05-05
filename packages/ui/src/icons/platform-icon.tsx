@@ -1,38 +1,16 @@
+import { PLATFORM_LABELS, PLATFORM_LIST, type Platform } from "@pulse/types/platform";
 import type { SVGProps } from "react";
 
-export type Platform =
-  | "instagram"
-  | "twitter"
-  | "facebook"
-  | "linkedin"
-  | "threads"
-  | "tiktok"
-  | "youtube";
+// Re-export for consumers that have been importing Platform from this module
+export type { Platform };
+export { PLATFORM_LABELS };
+/** @deprecated import `PLATFORM_LIST` from `@pulse/types/platform` instead */
+export const PLATFORMS = PLATFORM_LIST;
 
 export type PlatformIconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "xmlns"> & {
   platform: Platform;
   size?: number | string;
 };
-
-export const PLATFORM_LABELS: Record<Platform, string> = {
-  instagram: "Instagram",
-  twitter: "Twitter/X",
-  facebook: "Facebook",
-  linkedin: "LinkedIn",
-  threads: "Threads",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-};
-
-export const PLATFORMS: readonly Platform[] = [
-  "instagram",
-  "twitter",
-  "facebook",
-  "linkedin",
-  "threads",
-  "tiktok",
-  "youtube",
-] as const;
 
 export function PlatformIcon({ platform, size = 24, ...rest }: PlatformIconProps) {
   const label = PLATFORM_LABELS[platform];

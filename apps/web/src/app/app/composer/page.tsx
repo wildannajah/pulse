@@ -1,13 +1,12 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { Clock, Hash, Image as ImageIcon, Send, Sparkles } from "lucide-react";
 import { useState } from "react";
-
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { MOCK_BRANDS } from "@/lib/mock-data";
-import { PLATFORM_LIST, PLATFORM_META } from "@/lib/platform-meta";
 
 const SAMPLE_GENERATED =
   "Exciting news from the Acme team! We've been working hard behind the scenes and can't wait to share what's coming next. Stay tuned for a big announcement dropping this week. 🚀 #AcmeCorp #ProductLaunch";
@@ -22,7 +21,7 @@ export default function ComposerPage() {
   const [scheduleTime, setScheduleTime] = useState("10:00");
 
   const brand = MOCK_BRANDS[0]!;
-  const activeMeta = PLATFORM_META[previewPlatform];
+  const activeMeta = PLATFORM_CONSTRAINTS[previewPlatform];
   const charCount = content.length;
   const overLimit = charCount > activeMeta.charLimit;
 
@@ -61,7 +60,7 @@ export default function ComposerPage() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {PLATFORM_LIST.map((key) => {
-                const m = PLATFORM_META[key];
+                const m = PLATFORM_CONSTRAINTS[key];
                 const on = selectedPlatforms.includes(key);
                 return (
                   <button
@@ -183,7 +182,7 @@ export default function ComposerPage() {
           </div>
           <div className="flex flex-wrap gap-1">
             {selectedPlatforms.map((key) => {
-              const m = PLATFORM_META[key];
+              const m = PLATFORM_CONSTRAINTS[key];
               const active = previewPlatform === key;
               return (
                 <button

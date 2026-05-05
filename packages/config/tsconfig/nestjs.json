@@ -3,8 +3,8 @@
   "extends": "./base.json",
   "compilerOptions": {
     "ignoreDeprecations": "5.0",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2022",
     "lib": ["ES2022"],
     "experimentalDecorators": true,

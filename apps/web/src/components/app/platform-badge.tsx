@@ -1,13 +1,12 @@
+import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
 import type { Platform } from "@pulse/ui/icons/platform-icon";
-
-import { PLATFORM_META } from "@/lib/platform-meta";
 
 type PlatformBadgeProps = {
   platform: Platform;
 };
 
 export function PlatformBadge({ platform }: PlatformBadgeProps) {
-  const meta = PLATFORM_META[platform];
+  const meta = PLATFORM_CONSTRAINTS[platform];
   return (
     <span
       className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 font-medium text-[11px]"

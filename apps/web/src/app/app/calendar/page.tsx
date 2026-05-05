@@ -1,14 +1,13 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
 import { PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useState } from "react";
-
 import { PageHeader } from "@/components/app/page-header";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { MOCK_CALENDAR_POSTS, MOCK_POSTS } from "@/lib/mock-data";
-import { PLATFORM_META } from "@/lib/platform-meta";
 import { cn } from "@/lib/utils/cn";
 
 const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -97,7 +96,7 @@ export default function CalendarPage() {
                   </span>
                   <div className="flex flex-col gap-0.5">
                     {posts.map((post, pi) => {
-                      const meta = PLATFORM_META[post.platform];
+                      const meta = PLATFORM_CONSTRAINTS[post.platform];
                       return (
                         <div
                           // biome-ignore lint/suspicious/noArrayIndexKey: same-day same-platform allowed; index disambiguates
@@ -145,7 +144,7 @@ export default function CalendarPage() {
             </div>
           ) : (
             selectedPosts.map((post, i) => {
-              const meta = PLATFORM_META[post.platform];
+              const meta = PLATFORM_CONSTRAINTS[post.platform];
               const matched = MOCK_POSTS.find((p) => p.platforms.includes(post.platform));
               return (
                 <div

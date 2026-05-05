@@ -44,6 +44,9 @@ importers:
       '@prisma/client':
         specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@pulse/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       '@trpc/server':
         specifier: ^11.16.0
         version: 11.16.0(typescript@5.9.3)
@@ -292,6 +295,9 @@ importers:
 
   apps/workers:
     dependencies:
+      '@pulse/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       bullmq:
         specifier: ^5.76.2
         version: 5.76.2
@@ -352,6 +358,10 @@ importers:
         version: 5.9.3
 
   packages/ui:
+    dependencies:
+      '@pulse/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       '@pulse/config':
         specifier: workspace:*

@@ -6,7 +6,7 @@
  * straightforward later.
  */
 
-import type { Platform } from "@pulse/ui/icons/platform-icon";
+import type { Platform } from "@pulse/types/platform";
 
 export type PostStatus = "draft" | "scheduled" | "published" | "failed";
 

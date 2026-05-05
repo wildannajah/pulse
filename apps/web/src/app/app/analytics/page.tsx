@@ -1,11 +1,10 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { useState } from "react";
-
 import { PageHeader } from "@/components/app/page-header";
 import { MOCK_ANALYTICS } from "@/lib/mock-data";
-import { PLATFORM_LIST, PLATFORM_META } from "@/lib/platform-meta";
 import { cn } from "@/lib/utils/cn";
 
 type DateRange = "7d" | "30d" | "90d";
@@ -18,7 +17,7 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState<DateRange>("30d");
 
   const data = MOCK_ANALYTICS[activePlatform];
-  const meta = PLATFORM_META[activePlatform];
+  const meta = PLATFORM_CONSTRAINTS[activePlatform];
 
   const cards = [
     {
@@ -73,7 +72,7 @@ export default function AnalyticsPage() {
         {/* Platform tabs */}
         <div className="flex flex-wrap gap-1.5">
           {PLATFORM_LIST.map((key) => {
-            const m = PLATFORM_META[key];
+            const m = PLATFORM_CONSTRAINTS[key];
             const active = activePlatform === key;
             return (
               <button

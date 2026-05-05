@@ -1,5 +1,6 @@
 "use client";
 
+import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import {
   Bookmark,
@@ -14,9 +15,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useState } from "react";
-
 import type { MockPost } from "@/lib/mock-data";
-import { PLATFORM_META } from "@/lib/platform-meta";
 import { cn } from "@/lib/utils/cn";
 
 import { StatusBadge } from "./status-badge";
@@ -35,7 +34,7 @@ export function PostCard({ post }: PostCardProps) {
   const [localLikes, setLocalLikes] = useState(post.likes);
   const [activePlatform, setActivePlatform] = useState<Platform>(post.platforms[0]!);
 
-  const meta = PLATFORM_META[activePlatform];
+  const meta = PLATFORM_CONSTRAINTS[activePlatform];
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -51,7 +50,7 @@ export function PostCard({ post }: PostCardProps) {
       {post.platforms.length > 1 ? (
         <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
           {post.platforms.map((plat) => {
-            const m = PLATFORM_META[plat];
+            const m = PLATFORM_CONSTRAINTS[plat];
             const active = activePlatform === plat;
             return (
               <button

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pulse/types": "workspace:*",
     "bullmq": "^5.76.2",
     "dotenv": "^17.4.2",
     "ioredis": "^5.10.1",

@@ -15,10 +15,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { MOCK_BRANDS, type MockBrand } from "@/lib/mock-data";
+import { MOCK_BRANDS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils/cn";
+import { useBrandStore } from "@/stores/brand-store";
 
 type NavItem = {
   href: string;
@@ -44,8 +45,19 @@ export type SidebarProps = {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
-  const [activeBrand, setActiveBrand] = useState<MockBrand>(MOCK_BRANDS[0]!);
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const setActiveBrandId = useBrandStore((s) => s.setActiveBrandId);
   const [dropOpen, setDropOpen] = useState(false);
+
+  // Default to first brand if none selected (mock-data path; real flow seeds via server component)
+  useEffect(() => {
+    if (!activeBrandId && MOCK_BRANDS[0]) {
+      setActiveBrandId(MOCK_BRANDS[0].id);
+    }
+  }, [activeBrandId, setActiveBrandId]);
+
+  const activeBrand = MOCK_BRANDS.find((b) => b.id === activeBrandId) ?? MOCK_BRANDS[0]!;
+
   const initials = user.name
     .split(" ")
     .map((s) => s[0])
@@ -92,7 +104,7 @@ export function Sidebar({ user }: SidebarProps) {
                 type="button"
                 key={b.id}
                 onClick={() => {
-                  setActiveBrand(b);
+                  setActiveBrandId(b.id);
                   setDropOpen(false);
                 }}
                 className={cn(
