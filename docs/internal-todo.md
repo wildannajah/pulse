@@ -4,6 +4,8 @@ The plan we're actually executing. Scope: build a working social-media managemen
 
 > **Operating principle:** substrate is SaaS-grade from day one (so M3 public launch is bolt-on, not refactor); public-facing artifacts (billing, marketing, legal, support) wait until we go public.
 
+> **Last reviewed: 2026-05-05.**
+
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
 ---
@@ -237,6 +239,12 @@ Rough total: 6–8 weeks of focused work for a single developer; faster with the
 ## Status tracker
 
 Update this section as work progresses.
+
+> **Scope note:** Phases A–P are *feature-layer* work that begins after the Phase 0
+> foundation is in place. Foundation work (auth, tRPC, guards, deployment, encryption,
+> Prisma migrations, etc.) is tracked in `ROADMAP.MD` under Phase 0 — not here.
+> The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
+> measure of total project progress.
 
 - **Backend phases:** A 0/2 · B 0/4 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **0 of ~52 done**
 - **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
