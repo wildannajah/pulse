@@ -4,7 +4,7 @@ The plan we're actually executing. Scope: build a working social-media managemen
 
 > **Operating principle:** substrate is SaaS-grade from day one (so M3 public launch is bolt-on, not refactor); public-facing artifacts (billing, marketing, legal, support) wait until we go public.
 
-> **Last reviewed: 2026-05-05.**
+> **Last reviewed: 2026-05-06.**
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
@@ -14,21 +14,21 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
 - [ ] **AI provider** — Claude API / OpenAI / both? *PRD §9 assumes Claude*
 - [ ] **Workers hosting** — Railway separate service (recommended) / Render / Fly?
-- [ ] **Design system** — wait for full design / build now on shadcn defaults? *(strong recommendation: shadcn now, re-skin later)*
+- [x] **Design system** — violet pastel on shadcn adopted (`docs/design.md` is live; re-skin in progress)
 - [ ] **Approval workflow** — needed for our team, or skip?
-- [ ] **Brand setup** — single brand for the team or many?
+- [x] **Brand setup** — multiple brands per workspace (full multi-brand architecture applies)
 
 ---
 
 ## Backend work (no design-system dependency, fully unblocked)
 
 ### Phase A — Foundation cleanup (do first, ~1 day)
-- [ ] `packages/types/platform-constraints.ts` — char limits, hashtag caps, media specs, video duration, API rate limits per platform from PRD §5
-- [ ] `packages/types/event-types.ts` — typed BullMQ job payloads (post-publish, token-refresh, analytics-sync, inbox-sync)
+- [x] `packages/types/platform-constraints.ts` — char limits, hashtag caps, media specs, video duration, API rate limits per platform from PRD §5
+- [x] `packages/types/event-types.ts` — typed BullMQ job payloads (post-publish, token-refresh, analytics-sync, inbox-sync)
 
 ### Phase B — Platform adapter layer (~2 days)
-- [ ] `apps/api/src/platforms/base-platform-adapter.ts` — interface: `publish() / fetchAnalytics() / refreshToken() / fetchInbox() / fetchProfile() / revokeToken()`
-- [ ] `apps/api/src/platforms/adapter-registry.ts` — `getAdapter(platform: Platform)` factory
+- [x] `apps/api/src/platforms/base-platform-adapter.ts` — interface: `publish() / fetchAnalytics() / refreshToken() / fetchInbox() / fetchProfile() / revokeToken()` (+ `reply()`)
+- [x] `apps/api/src/platforms/adapter-registry.ts` — `getAdapter(platform: Platform)` factory
 - [ ] OAuth callback route shape: `/api/oauth/{platform}/callback` (Next.js handler that proxies to api?) or direct on apps/api
 - [ ] Decision: OAuth callback origin — apps/web (then proxy) or apps/api directly?
 
@@ -246,8 +246,8 @@ Update this section as work progresses.
 > The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
 > measure of total project progress.
 
-- **Backend phases:** A 0/2 · B 0/4 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **0 of ~52 done**
+- **Backend phases:** A 2/2 · B 2/4 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **4 of ~52 done**
 - **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
 - **SaaS-readiness:** 10 of 21 done (the schema/architecture half)
 
-**First milestone:** Phase A + B + D + C complete = first tweet published via Pulse end-to-end. Target: ~1 week of focused work after AI/workers/design decisions land.
+**First milestone:** Phase A + B + D + C complete = first tweet published via Pulse end-to-end. Target: ~1 week of focused work after AI/workers hosting decisions land.
