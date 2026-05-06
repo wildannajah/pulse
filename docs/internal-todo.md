@@ -13,7 +13,7 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 ## Decisions blocking work
 
 - [ ] **AI provider** — Claude API / OpenAI / both? *PRD §9 assumes Claude*
-- [ ] **Workers hosting** — Railway separate service (recommended) / Render / Fly?
+- [x] **Workers hosting** — Railway (deployed; post-publish worker live)
 - [x] **Design system** — violet pastel on shadcn adopted (`docs/design.md` is live; re-skin in progress)
 - [ ] **Approval workflow** — needed for our team, or skip?
 - [x] **Brand setup** — multiple brands per workspace (full multi-brand architecture applies)
@@ -51,11 +51,11 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [ ] PostMedia row writes after upload completes (client confirms via separate procedure)
 
 ### Phase E — Workers deployment + remaining queues (~2 days)
-- [ ] `apps/workers` Dockerfile (mirror `apps/api`'s pattern)
-- [ ] Deploy as Railway service (separate from API; same project for private Redis URL)
-- [ ] `token-refresh` queue worker — runs hourly, refreshes tokens expiring within 24h, marks `ConnectedAccount.status = "expired"` on failure
-- [ ] `analytics-sync` queue worker — runs daily per brand, populates `AnalyticsSnapshot` + `PostMetric`
-- [ ] `inbox-sync` queue worker — runs every 5min per connected account, populates `InboxItem`
+- [x] `apps/workers` Dockerfile (mirror `apps/api`'s pattern)
+- [x] Deploy as Railway service (separate from API; same project for private Redis URL)
+- [~] `token-refresh` queue worker — runs hourly, refreshes tokens expiring within 24h, marks `ConnectedAccount.status = "expired"` on failure
+- [~] `analytics-sync` queue worker — runs daily per brand, populates `AnalyticsSnapshot` + `PostMetric`
+- [~] `inbox-sync` queue worker — runs every 5min per connected account, populates `InboxItem`
 - [ ] BullMQ repeat jobs configured (cron-style schedules)
 - [ ] Idempotency keys on every job (e.g. `post-publish:{publicationId}`)
 - [ ] `JobLog` writes on start/success/failure with `brandId` + `platform` tags
