@@ -9,7 +9,7 @@ COPY apps/workers/ ./apps/workers/
 
 RUN pnpm install --frozen-lockfile
 
-RUN cd apps/workers && npx tsc -p tsconfig.build.json && echo "Build OK" && ls dist/
+RUN cd apps/workers && pnpm build && echo "Build OK" && ls dist/
 
 # ─────────────────────────────────────────────
 FROM node:20-slim AS runner
