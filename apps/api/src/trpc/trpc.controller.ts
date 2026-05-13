@@ -4,12 +4,17 @@ import type { Request as ExpressRequest, Response as ExpressResponse } from "exp
 
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { PrismaService } from "../prisma/prisma.service";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
+import { R2Service } from "../storage/r2.service";
 import { appRouter } from "./app-router";
 import { createTrpcContext } from "./trpc-context";
 
 @Controller("trpc")
 export class TrpcController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly r2: R2Service,
+  ) {}
 
   @All("*path")
   async handle(@Req() req: ExpressRequest, @Res() res: ExpressResponse): Promise<void> {
@@ -41,7 +46,7 @@ export class TrpcController {
       endpoint: "/trpc",
       req: fetchReq,
       router: appRouter,
-      createContext: () => createTrpcContext({ req: fetchReq, prisma: this.prisma }),
+      createContext: () => createTrpcContext({ req: fetchReq, prisma: this.prisma, r2: this.r2 }),
     });
 
     res.status(response.status);
