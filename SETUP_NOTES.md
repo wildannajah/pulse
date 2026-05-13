@@ -79,7 +79,7 @@ pulse/
     │   └── src/identifier-schema.ts
     ├── types/                   # @pulse/types — TS-only
     │   └── src/branded-types.ts
-    └── ui/                      # @pulse/ui — shared React components (placeholder)
+    └── ui/                      # @pulse/ui — BrandMark, BrandLockup, PlatformIcon shipped
         └── src/
 ```
 
@@ -228,7 +228,7 @@ Dev:
 - **Biome enforces `useFilenamingConvention` strict kebab-case**, with overrides for Next.js special files (`page.tsx`, `layout.tsx`, etc.), Storybook stories, NestJS dot-pattern files (`app.module.ts`, `health.controller.ts`), and config files like `next.config.ts`.
 
 ### Multi-brand readiness (from CLAUDE.md)
-- `apps/api` is the canonical place to enforce `brandId` scoping via Nest guards/middleware (not yet wired — placeholder).
+- `apps/api` enforces `brandId` scoping via `SessionGuard` + `BrandScopeGuard` (wired; see Phase 0 "Already done" in ROADMAP.MD).
 - `apps/workers/src/queues/post-publish.worker.ts` is typed as `Worker<PostPublishJob>` where the job carries `brandId` and `platform`, matching the BullMQ contract CLAUDE.md describes.
 
 ---
@@ -287,7 +287,7 @@ SIGTERM                    → exit 143 + log "[PrismaService] Prisma disconnect
 - **`apps/web/src/components/ui` is excluded from Biome filename checks** so shadcn's generator output (which sometimes uses non-kebab patterns inside the directory) doesn't fight the lint rule.
 - **`apps/api/**/*.ts` filename rule is disabled** because Nest's `*.module.ts`, `*.controller.ts`, `*.service.ts` convention reads as multi-dot, which Biome's `useFilenamingConvention` flags. The dot-pattern is a stronger constraint than the lint rule, so we accept it.
 - **Workers use CommonJS.** If you later need ESM (e.g. to share an ESM-only schema package), switch `module: "NodeNext"` and add `.js` extensions to relative imports.
-- **`packages/ui` has no `typecheck` script** while it has no `.tsx` source. Re-add `"typecheck": "tsc --noEmit"` once the first component lands; until then `tsc` errors with TS18003.
+- **`packages/ui` has no `typecheck` script** even though it now has `.tsx` source (`BrandMark`, `BrandLockup`, `PlatformIcon` in `src/brand/` and `src/icons/`). Re-add `"typecheck": "tsc --noEmit"` to `packages/ui/package.json` — `tsc` will error with TS18003 until this is added.
 
 ---
 
@@ -488,3 +488,14 @@ No client codegen, no schema sync, no extra build step. The `AppRouter` type re-
 | Web proxy: `/api/trpc/health.brand` with cookie + bogus brand | ✅ tRPC `FORBIDDEN` |
 
 Browser-flow check (sign in → `/app/dev/trpc-smoke` → see both queries succeed → spoof the store with a foreign brand id and confirm `FORBIDDEN`) is best done manually in a real browser; the curl-via-cookie matrix above already exercises every path the React Query client would take.
+
+---
+
+## Reconciliation note (2026-05-13)
+
+Fixed three stale factual claims (no checkbox items in this file):
+
+- **Tree / `packages/ui`**: Updated `# @pulse/ui — shared React components (placeholder)` to note `BrandMark`, `BrandLockup`, `PlatformIcon` shipped (source in `src/brand/` and `src/icons/`).
+- **Multi-brand readiness**: Removed "not yet wired — placeholder" — `SessionGuard` and `BrandScopeGuard` are fully wired (Phase 0 complete).
+- **Known caveats / `packages/ui` typecheck**: Updated to reflect that source now exists but the `typecheck` script was not added to `package.json`; action item remains.
+- **Verification matrices**: All procedure names (`health.me`, `health.brand`) unchanged — no renames in scope. Checks still valid; not re-run.

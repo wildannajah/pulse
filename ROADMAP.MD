@@ -4,7 +4,7 @@ A complete, sequenced checklist of everything between today and a shipped Phase 
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
-> **Last reviewed: 2026-04-30.** UI work is currently blocked on the design system landing. Backend work (platform adapters, OAuth flows, BullMQ workers, tRPC procedures, validation schemas, AI provider integration) proceeds in parallel — when the design system arrives, UI becomes glue work against an already-built API surface.
+> **Last reviewed: 2026-05-13.** Design system is live (`docs/design.md`); UI work is unblocked. Platform adapter interface + registry, R2 storage service, media tRPC procedures, and workers deployment all shipped since last review.
 
 ---
 
@@ -47,12 +47,12 @@ The plumbing every feature depends on. None of this is in the PRD as a "feature"
 - [x] **Web deployed to Vercel** with Prisma generate in build step
 
 ### Remaining foundation work
-- [ ] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync` (only `post-publish` stub exists)
+- [~] BullMQ queues for all 4 types: `post-publish`, `token-refresh`, `analytics-sync`, `inbox-sync` (`post-publish` stub registered + Bull Board lists all 4 names; `token-refresh`, `analytics-sync`, `inbox-sync` worker files don't exist)
 - [ ] `JobLog` writes wired into worker lifecycle (start, success, failure)
 - [ ] Wireframes for the other 4 core screens (Composer, Calendar, Inbox, Analytics)
 - [ ] Component inventory extracted from the design spec
-- [ ] `@pulse/ui` populated with the first ~10 shared primitives (Button, Input, Card, etc.) — *blocked on design system*
-- [ ] `packages/types/platform-constraints.ts` — per-platform char limits, hashtag caps, media specs from PRD §5 as single source of truth
+- [ ] `@pulse/ui` populated with the first ~10 shared primitives (Button, Input, Card, etc.) — design system now live; brand components (BrandMark, BrandLockup, PlatformIcon) shipped but UI primitives not yet added
+- [x] `packages/types/platform-constraints.ts` — per-platform char limits, hashtag caps, media specs from PRD §5 as single source of truth
 
 > Infra-flavored items (Sentry, R2, rate limiting, CI, Storybook deploy) moved to the dedicated **Infrastructure** section below.
 
@@ -99,9 +99,9 @@ Cuts across all phases. Some items block Phase 1 launch directly; others should 
 - [x] **TLS / SSL** — automatic on Vercel + Railway auto-domains
 
 ### Hard launch blockers (Phase 1 cannot function without these)
-- [ ] **Workers deployment** — host `apps/workers` as a long-running Railway service (recommend: separate service, same project as the API so it shares the Redis private URL). Without this, scheduled posts never publish, tokens never refresh, analytics never sync, inbox never updates.
-- [ ] **Cloudflare R2 (or S3) bucket** for media uploads — composer can't accept media without it. R2 preferred (zero egress fees) for a media-heavy app.
-- [ ] **Signed-URL upload flow** — server-issued upload URLs so client never sees R2 credentials
+- [x] **Workers deployment** — `apps/workers` deployed as separate Railway service (same project as API, shares private Redis URL); Bull Board + basic auth; `post-publish` stub registered. `token-refresh`, `analytics-sync`, `inbox-sync` worker files still needed.
+- [~] **Cloudflare R2 (or S3) bucket** — `r2.service.ts` (presignPut / presignGet / deleteObject / publicUrl) implemented; `scripts/test-r2.ts` smoke test exists; bucket likely provisioned — *needs out-of-band verification*.
+- [x] **Signed-URL upload flow** — `r2.service.ts` presigned URLs + `mediaRouter.requestUpload` / `confirmUpload` tRPC procedures with `{workspaceId}/{brandId}/...` tenant-prefix guard.
 
 ### Strongly recommended for launch (beta survivable without; not GA-ready without)
 - [ ] **Sentry** wired in `apps/api` and `apps/workers` with `brandId` + `platform` tags (per CLAUDE.md spec) — first 3am production failure makes the case
@@ -125,7 +125,7 @@ Cuts across all phases. Some items block Phase 1 launch directly; others should 
 - [ ] **Cost monitoring + budget alerts** — Railway + Vercel + Resend + R2 + (eventual) AI provider all bill independently
 
 ### Open infra questions
-- [ ] **Workers hosting** — Railway separate service vs Render vs Fly?
+- [x] **Workers hosting** — Railway separate service (same project as API, shares private Redis URL)
 - [ ] **Production domain name** — what is it? (Affects everything in the launch-blocking list)
 - [ ] **Staging strategy** — three patterns above, pick one
 - [ ] **Secrets management** — Doppler vs platform vars (and update CLAUDE.md either way)
@@ -147,14 +147,14 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [x] Default Brand created with workspace
 - [x] `useBrandStore()` Zustand store + brand-id propagation in API calls *(landed with tRPC wiring)*
 - [ ] Workspace switcher UI (header dropdown) — *waits for design*
-- [ ] Brand switcher UI (separate from workspace switcher) — *waits for design*
+- [~] Brand switcher UI — `sidebar.tsx` has brand switcher dropdown; design dependency resolved; mock data only
 - [ ] User profile settings page — *waits for design*
 - [ ] Account deletion (soft delete + queued hard-delete after grace period)
 
 ### 1B — OAuth Platform Connect (all 7 platforms)
 **Per-platform infrastructure (build once, reuse)**
-- [ ] `BasePlatformAdapter` interface — `publish()`, `fetchAnalytics()`, `refreshToken()`, `fetchInbox()`, `fetchProfile()`
-- [ ] Platform adapter registry + factory
+- [x] `BasePlatformAdapter` interface — `publish()`, `fetchAnalytics()`, `refreshToken()`, `fetchInbox()`, `fetchProfile()` + `reply()` (with `AdapterResult<T>` + `AdapterCredential`)
+- [~] Platform adapter registry + factory — `adapter-registry.ts` `getAdapter()` returns `NotImplementedAdapter` for all 7 platforms
 - [ ] OAuth callback route (`/api/auth/connect/[platform]/callback`)
 - [ ] Encrypted token write to `connected_accounts` *(EncryptionService ready)*
 - [ ] Connection status surfaced in UI (active / expired / revoked / error)
@@ -172,10 +172,10 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [ ] YouTube — adapter, publish (Shorts only for v1?), profile
 
 ### 1C — Content Composer & Scheduler (4.2)
-- [ ] Composer UI shell (left: editor, right: previews)
+- [~] Composer UI shell (left: editor, right: previews) — page exists with platform multi-select + single preview card; no Tiptap editor, no scheduler, mock data only
 - [ ] Tiptap editor with platform-aware character counts
 - [ ] Per-platform variant overrides (different text per platform)
-- [ ] Media upload to R2 with progress + cancel
+- [~] Media upload to R2 with progress + cancel — backend (`r2.service.ts` + `mediaRouter.requestUpload/confirmUpload`) done; frontend upload UI not yet built
 - [ ] Image cropper per platform aspect ratio
 - [ ] Video upload + thumbnail extraction
 - [ ] Live preview cards: Instagram, Twitter, LinkedIn, Facebook, Threads, TikTok, YouTube
@@ -189,7 +189,7 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [ ] Per-publication error surfacing back to UI
 
 ### 1D — Content Calendar (4.3)
-- [ ] Calendar grid (monthly view)
+- [~] Calendar grid (monthly view) — month grid + day-detail aside exist; mock data only; no weekly view, DnD, or filters
 - [ ] Weekly view toggle
 - [ ] Platform color coding on each post chip
 - [ ] Click a post → opens read-only detail drawer
@@ -199,9 +199,9 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 - [ ] Filter by status (scheduled / published / draft / failed)
 
 ### 1E — Dashboard & Overview (4.1)
-- [ ] Layout shell (sidebar + main + brand switcher)
-- [ ] Per-platform status cards (followers, recent engagement, post performance)
-- [ ] Unified feed: real-time activity across connected platforms
+- [~] Layout shell (sidebar + main + brand switcher) — `sidebar.tsx` + page layout exist; brand switcher in sidebar; mock data; no workspace switcher
+- [~] Per-platform status cards (followers, recent engagement, post performance) — 4 stat cards + ActivityFeed exist in dashboard; mock data only
+- [~] Unified feed: real-time activity across connected platforms — `ActivityFeed` component exists; mock data only
 - [ ] Quick post button (floating, opens composer modal from any page)
 - [ ] Notification bell with aggregated notifications (Phase 1 should-have)
 - [ ] Empty states for "no connected accounts" and "no posts yet"
@@ -209,7 +209,7 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 ### 1F — Unified Inbox (4.4)
 - [ ] `inbox-sync` worker pulls DMs / comments / mentions per connected account
 - [ ] `InboxItem` rows created with deduplication
-- [ ] Inbox list UI (chronological)
+- [~] Inbox list UI (chronological) — three-pane inbox page exists (filters + list + conversation + reply box); mock data only; reply box not wired
 - [ ] Read / unread / resolved status toggles
 - [ ] Reply UI (per-platform reply via adapter)
 - [ ] Platform filter (Phase 1 should-have)
@@ -219,10 +219,10 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 ### 1G — Basic Analytics (4.5)
 - [ ] `analytics-sync` worker pulls metrics per connected account daily
 - [ ] `PostMetric` rows populated per publication
-- [ ] Platform overview stats (followers, impressions, reach, engagement rate)
-- [ ] Post performance table (sortable: likes, comments, shares, reach)
-- [ ] Date range filter (7 days / 30 days / custom)
-- [ ] Per-platform tab in analytics view
+- [~] Platform overview stats (followers, impressions, reach, engagement rate) — analytics page has 4 stat cards + platform tabs + date range + FullLineChart; mock data (real `brandOverview` / `followerGrowth` / `topPosts` tRPC procedures exist but UI not wired)
+- [~] Post performance table (sortable: likes, comments, shares, reach) — top posts table exists in analytics; mock data only
+- [~] Date range filter (7 days / 30 days / custom) — date range UI exists in analytics; mock data only
+- [~] Per-platform tab in analytics view — platform tabs exist in analytics page; mock data only
 - [ ] CSV export of post performance table
 
 ### 1H — AI Caption Generator (4.6)
@@ -385,25 +385,45 @@ These run in parallel with Phase 1–3 dev. Don't ship without them.
 
 ## Quick scoreboard
 
-- **Foundation (Phase 0):** 33 of ~34 active done — only feature-adjacent foundation items remain (BullMQ queues, JobLog wiring, design wireframes, `@pulse/ui` primitives, platform-constraints.ts); product-analytics section (9 items) on hold and not counted
-- **Infrastructure:** 6 of ~22 done — hosting + DB + Redis + email already provisioned; only 3 *true* launch blockers remain (workers deployment, R2 bucket, signed-URL upload flow); rest are "strongly recommended" but beta-survivable
-- **Phase 1:** 7 of ~85 done — `useBrandStore` checked off as side-effect of tRPC wiring
+- **Foundation (Phase 0):** 34 of ~35 active done — `platform-constraints.ts` and `event-types.ts` both shipped; remaining: BullMQ queues [~] (post-publish stub + 3 worker files missing), JobLog wiring, design wireframes, `@pulse/ui` Button/Input/Card primitives; product-analytics section (9 items) on hold and not counted
+- **Infrastructure:** 9 of ~22 done — workers deployment [x] + signed-URL flow [x] + workers hosting decision [x] added; R2 bucket [~] (code done, bucket likely provisioned); all hard launch blockers resolved pending R2 out-of-band confirm
+- **Phase 1:** 8 of ~85 done — `BasePlatformAdapter` interface [x] added; 13 UI items moved to [~] (pages exist with mock data); adapter registry + media upload backend [~]
 - **Phase 2:** 0 of ~40 done
 - **Phase 3:** 0 of ~30 done (3G "Programmatic access" flagged as out-of-PRD; 4 items there don't count toward Phase 3 burn-down)
 - **Pre-launch:** 0 of ~12 done
 
-Total surface area: ~215 trackable items (split across new Infrastructure bucket). Foundation is ~85% complete — remaining chunks are BullMQ queues (3 of 4 still stubs), Sentry, R2/media storage, CI, Storybook deploy, and `@pulse/ui` primitives (the last is design-system-blocked).
+Total surface area: ~215 trackable items. Foundation is ~97% complete — remaining: BullMQ queues (token-refresh/analytics-sync/inbox-sync worker files don't exist), JobLog wiring, design wireframes, `@pulse/ui` Button/Input/Card layer. R2/media backend done; Sentry, CI, Storybook deploy still needed.
 
-**Next up while design is in flight (in priority order):**
+**Next up (as of 2026-05-13, in priority order):**
 
-1. **`packages/types/platform-constraints.ts`** — char limits / hashtag caps / media specs as one source of truth (consumed by composer validation later). 1-hour win, no decisions needed.
-2. **`BasePlatformAdapter` interface + Twitter/X end-to-end** (1B) — proves the pattern, lets the other 6 platforms fan out
-3. **Decide AI provider** (open question above) — unblocks 1H Caption Generator
-4. **`token-refresh` BullMQ worker** — depends on adapters being defined; prevents Phase 1 silent failures
-5. **`post-publish` worker** filled in beyond the stub — wire it to the adapter registry
-6. **`inbox-sync` and `analytics-sync` workers** — same pattern, run on cron via BullMQ repeat jobs
-7. **tRPC procedures** for `connectedAccount.*`, `post.*`, `inbox.*`, `analytics.*`, `aiGeneration.*` — define the contract; UI later just calls these
+1. **Twitter/X OAuth end-to-end** (1B) — `BasePlatformAdapter` interface, adapter registry, R2 service, and media tRPC all done; next milestone is first real tweet published via Pulse. Register Twitter dev app, implement `TwitterAdapter`, wire PKCE callback, write encrypted token to `ConnectedAccount`.
+2. **`post-publish` worker** — replace `console.log` stub with actual `getAdapter(platform)` dispatch; depends on at least one real adapter (item 1 above).
+3. **Decide AI provider** — unblocks 1H Caption Generator.
+4. **`token-refresh` BullMQ worker** — worker file doesn't exist yet; prevents Phase 1 silent token-expiry failures once real adapters land.
+5. **`inbox-sync` and `analytics-sync` workers** — worker files don't exist; `analyticsRouter` tRPC procedures (`brandOverview`, `followerGrowth`, `topPosts`) already real and ready to consume data.
+6. **Remaining tRPC procedures** — `brand.create/update`, `post.create/schedule/publishNow/delete` (list+get already real), `connectedAccount.*`, `inbox.reply/markRead`, `aiGeneration.*`.
+7. **Wire frontend to tRPC** — replace all `MOCK_*` data with real procedure calls across the 5 app pages; all pages exist as [~] shells waiting to be connected.
 
 > Product-analytics provider decision and event-taxonomy instrumentation are explicitly **deferred** — see Phase 0 "Product analytics & metrics tracking" callout. PRD §3.2 success metrics will not be measurable at launch.
 
 Every item in this list is server-only, fully testable via Vitest + tRPC's `appRouter.createCaller(ctx)` pattern, and produces a complete API surface that the eventual UI consumes as glue.
+
+---
+
+## Reconciliation note (2026-05-13)
+
+Audited against `main` codebase. Changes made:
+
+- **Phase 0 / Remaining:** `platform-constraints.ts` `[ ]` → `[x]` (file fully populated per ground truth). BullMQ queues `[ ]` → `[~]` (post-publish stub registered + Bull Board lists all 4 names; token-refresh/analytics-sync/inbox-sync worker files don't exist). `@pulse/ui` note updated: design system is live; BrandMark/BrandLockup/PlatformIcon shipped but Button/Input/Card primitives not yet added.
+- **Infrastructure / Hard launch blockers:** Workers deployment `[ ]` → `[x]` (deployed to Railway per internal-todo.md Phase E). R2 bucket `[ ]` → `[~]` (r2.service.ts + test-r2.ts smoke test exist; bucket likely provisioned, needs out-of-band confirm). Signed-URL upload flow `[ ]` → `[x]` (r2.service.ts + mediaRouter.requestUpload/confirmUpload done).
+- **Infrastructure / Open infra questions:** Workers hosting `[ ]` → `[x]` (decision made: Railway separate service).
+- **Phase 1 / 1A:** Brand switcher UI `[ ]` → `[~]` (sidebar.tsx has brand switcher dropdown; design unblocked; mock data only). Workspace switcher stays `[ ]` (confirmed not built).
+- **Phase 1 / 1B:** BasePlatformAdapter interface `[ ]` → `[x]` (base-platform-adapter.ts fully defined). Platform adapter registry `[ ]` → `[~]` (adapter-registry.ts exists; returns NotImplementedAdapter for all 7 platforms).
+- **Phase 1 / 1C:** Composer UI shell `[ ]` → `[~]` (page exists with platform multi-select + single preview; no Tiptap/scheduler/media upload UI). Media upload `[ ]` → `[~]` (backend done; no frontend UI).
+- **Phase 1 / 1D:** Calendar grid `[ ]` → `[~]` (month grid + day-detail exist; mock data; no weekly/DnD/filters).
+- **Phase 1 / 1E:** Layout shell, per-platform status cards, unified feed all `[ ]` → `[~]` (pages exist with mock data).
+- **Phase 1 / 1F:** Inbox list UI `[ ]` → `[~]` (three-pane page exists; mock data; reply box not wired).
+- **Phase 1 / 1G:** Platform overview stats, post performance table, date range filter, per-platform tab all `[ ]` → `[~]` (analytics page exists with mock data; real brandOverview/followerGrowth/topPosts tRPC procedures exist but UI not wired).
+- **Scoreboard:** Foundation 33→34, Infrastructure 6→9, Phase 1 7→8.
+- **"Last reviewed"** bumped to 2026-05-13. **"Next up"** list rewritten: items 1 (platform-constraints.ts done) and 2 partial (BasePlatformAdapter done) removed; priorities updated to reflect current state.
+- **Note:** `event-types.ts` (`packages/types/src/event-types.ts`) is also fully shipped but was not listed in ROADMAP.MD; counted in scorecard note. The `analytics.postMetrics` procedure was renamed to `analytics.followerGrowth` in the actual codebase — `docs/internal-todo.md` Phase G still references `postMetrics`; not changed here per "do not rewrite internal-todo.md" instruction.
