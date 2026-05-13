@@ -10,6 +10,7 @@ COPY apps/api/ ./apps/api/
 RUN pnpm install --frozen-lockfile
 
 RUN cd apps/api && npx prisma generate
+RUN cd packages/types && npx tsc -p tsconfig.build.json
 RUN cd apps/api && npx tsc -p tsconfig.build.json && echo "Build OK" && ls dist/
 
 # ─────────────────────────────────────────────
