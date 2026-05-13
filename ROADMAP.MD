@@ -154,8 +154,8 @@ Everything marked **Must Have** in the PRD plus the **Should Have**s explicitly 
 ### 1B — OAuth Platform Connect (all 7 platforms)
 **Per-platform infrastructure (build once, reuse)**
 - [x] `BasePlatformAdapter` interface — `publish()`, `fetchAnalytics()`, `refreshToken()`, `fetchInbox()`, `fetchProfile()` + `reply()` (with `AdapterResult<T>` + `AdapterCredential`)
-- [~] Platform adapter registry + factory — `adapter-registry.ts` `getAdapter()` returns `NotImplementedAdapter` for all 7 platforms
-- [ ] OAuth callback route (`/api/auth/connect/[platform]/callback`)
+- [x] Platform adapter registry + factory — `adapter-registry.ts` `getAdapter()` returns `NotImplementedAdapter` for all 7 platforms; `buildAuthorizationUrl()` + `exchangeAuthCode()` stubs added
+- [x] OAuth callback route (`GET /oauth/:platform/callback` on `apps/api`; HMAC-signed state token; 302 redirect flow)
 - [ ] Encrypted token write to `connected_accounts` *(EncryptionService ready)*
 - [ ] Connection status surfaced in UI (active / expired / revoked / error)
 - [ ] Disconnect flow (revoke on platform side + delete from DB)
@@ -418,7 +418,7 @@ Audited against `main` codebase. Changes made:
 - **Infrastructure / Hard launch blockers:** Workers deployment `[ ]` → `[x]` (deployed to Railway per internal-todo.md Phase E). R2 bucket `[ ]` → `[x]` (bucket provisioned; r2.service.ts + test-r2.ts smoke test confirm). Signed-URL upload flow `[ ]` → `[x]` (r2.service.ts + mediaRouter.requestUpload/confirmUpload done). All 3 hard launch blockers now `[x]`.
 - **Infrastructure / Open infra questions:** Workers hosting `[ ]` → `[x]` (decision made: Railway separate service).
 - **Phase 1 / 1A:** Brand switcher UI `[ ]` → `[~]` (sidebar.tsx has brand switcher dropdown; design unblocked; mock data only). Workspace switcher stays `[ ]` (confirmed not built).
-- **Phase 1 / 1B:** BasePlatformAdapter interface `[ ]` → `[x]` (base-platform-adapter.ts fully defined). Platform adapter registry `[ ]` → `[~]` (adapter-registry.ts exists; returns NotImplementedAdapter for all 7 platforms).
+- **Phase 1 / 1B:** BasePlatformAdapter interface `[ ]` → `[x]` (base-platform-adapter.ts fully defined, now includes `buildAuthorizationUrl` + `exchangeAuthCode`). Platform adapter registry `[ ]` → `[x]` (adapter-registry.ts; NotImplementedAdapter covers all 7 including OAuth stubs). OAuth callback route `[ ]` → `[x]` (`GET /oauth/:platform/callback` on apps/api; `OAuthStateService` HMAC state tokens; `connectedAccount.startOAuth` tRPC procedure).
 - **Phase 1 / 1C:** Composer UI shell `[ ]` → `[~]` (page exists with platform multi-select + single preview; no Tiptap/scheduler/media upload UI). Media upload `[ ]` → `[~]` (backend done; no frontend UI).
 - **Phase 1 / 1D:** Calendar grid `[ ]` → `[~]` (month grid + day-detail exist; mock data; no weekly/DnD/filters).
 - **Phase 1 / 1E:** Layout shell, per-platform status cards, unified feed all `[ ]` → `[~]` (pages exist with mock data).

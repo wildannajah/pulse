@@ -10,6 +10,10 @@ export const envSchema = z.object({
   ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, "ENCRYPTION_KEY must be exactly 64 hex characters"),
+  OAUTH_STATE_SECRET: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, "OAUTH_STATE_SECRET must be exactly 64 hex characters"),
+  API_URL: z.string().url(),
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
   R2_SECRET_ACCESS_KEY: z.string().min(1),

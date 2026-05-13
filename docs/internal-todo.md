@@ -4,7 +4,7 @@ The plan we're actually executing. Scope: build a working social-media managemen
 
 > **Operating principle:** substrate is SaaS-grade from day one (so M3 public launch is bolt-on, not refactor); public-facing artifacts (billing, marketing, legal, support) wait until we go public.
 
-> **Last reviewed: 2026-05-06.**
+> **Last reviewed: 2026-05-13.**
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
@@ -28,9 +28,12 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
 ### Phase B — Platform adapter layer (~2 days)
 - [x] `apps/api/src/platforms/base-platform-adapter.ts` — interface: `publish() / fetchAnalytics() / refreshToken() / fetchInbox() / fetchProfile() / revokeToken()` (+ `reply()`)
+- [x] `BasePlatformAdapter` extended with `buildAuthorizationUrl()` + `exchangeAuthCode()` (Phase B finish)
 - [x] `apps/api/src/platforms/adapter-registry.ts` — `getAdapter(platform: Platform)` factory
-- [ ] OAuth callback route shape: `/api/oauth/{platform}/callback` (Next.js handler that proxies to api?) or direct on apps/api
-- [ ] Decision: OAuth callback origin — apps/web (then proxy) or apps/api directly?
+- [x] OAuth callback route — `GET /oauth/:platform/callback` on `apps/api` (see Phase B decision log below)
+- [x] Decision: OAuth callback origin — **apps/api directly** (EncryptionService + Prisma + adapter all colocated; one fewer hop)
+- [x] `OAuthStateService` (HMAC-signed stateless state token, 10-min TTL)
+- [x] tRPC `connectedAccount.startOAuth` brand procedure (returns authorization URL)
 
 ### Phase C — Twitter/X end-to-end (~3 days, pilot platform)
 - [ ] Register Twitter dev app (manual step) — get client ID + secret into env
@@ -246,8 +249,22 @@ Update this section as work progresses.
 > The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
 > measure of total project progress.
 
-- **Backend phases:** A 2/2 · B 2/4 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **4 of ~52 done**
+- **Backend phases:** A 2/2 · B 7/7 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **9 of ~52 done**
 - **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
 - **SaaS-readiness:** 10 of 21 done (the schema/architecture half)
 
 **First milestone:** Phase A + B + D + C complete = first tweet published via Pulse end-to-end. Target: ~1 week of focused work after AI/workers hosting decisions land.
+
+---
+
+## Decision log
+
+### 2026-05-13 — OAuth callback origin
+
+`apps/api` hosts `GET /oauth/:platform/callback` directly. State is an HMAC-signed
+opaque token (`OAuthStateService`, 10-min TTL) issued by the `connectedAccount.startOAuth`
+tRPC mutation. Rationale: `EncryptionService`, Prisma, and adapter code all live
+in `apps/api`; routing the callback through `apps/web` would add one extra hop and
+duplicate the encryption boundary without any UX benefit. The user-facing
+landing page after success is still `apps/web` — done via `302` to
+`${WEB_ORIGIN}/app/settings/connections?status=…`.
