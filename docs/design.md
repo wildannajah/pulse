@@ -4,7 +4,7 @@
 > This file is read by **claude.ai/design** during onboarding and by **Claude Code** at build time.
 > When in doubt, this document wins over any individual screen or component.
 
-> Last reviewed: 2026-05-06
+> Last reviewed: 2026-05-13
 
 ---
 
@@ -461,3 +461,18 @@ These should be resolved over the next few weeks but are not blocking:
 ---
 
 *End of DESIGN.md*
+
+---
+
+## Reconciliation note (2026-05-13)
+
+Audited §14 "Open questions / known gaps" against `main` codebase. All 6 items verified as still open — no marks changed:
+
+- **Contrast verification** — still unverified. `[ ]` unchanged.
+- **Mobile breakpoints** — still unpressure-tested. `[ ]` unchanged.
+- **Skeleton / EmptyState / ErrorState primitives** — confirmed not built in `components/ui/`. `[ ]` unchanged.
+- **Inline OKLCH cleanup** — confirmed still present in `activity-feed.tsx` and `app/activity/page.tsx`. `[ ]` unchanged.
+- **Storybook coverage** — confirmed: only `button.stories.tsx` exists (1 file). `[ ]` unchanged.
+- **Motion library decision** — `tw-animate-css` wired, `motion` installed but unused. `[ ]` unchanged.
+
+Only change: "Last reviewed" bumped to 2026-05-13.
