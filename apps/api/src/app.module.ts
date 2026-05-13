@@ -5,6 +5,7 @@ import { AuthModule } from "./auth/auth.module";
 import { validateEnv } from "./config/env-schema";
 import { EncryptionModule } from "./encryption/encryption.module";
 import { HealthModule } from "./health/health.module";
+import { PlatformsModule } from "./platforms/platforms.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { StorageModule } from "./storage/storage.module";
 import { TrpcModule } from "./trpc/trpc.module";
@@ -18,8 +19,9 @@ import { TrpcModule } from "./trpc/trpc.module";
     PrismaModule,
     AuthModule,
     EncryptionModule,
-    HealthModule,
     StorageModule,
+    PlatformsModule,
+    HealthModule,
     TrpcModule,
   ],
 })
