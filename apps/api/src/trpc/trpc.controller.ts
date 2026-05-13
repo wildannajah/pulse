@@ -1,7 +1,10 @@
 import { All, Controller, Req, Res } from "@nestjs/common";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
+import { ConfigService } from "@nestjs/config";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
-
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
+import { OAuthStateService } from "../platforms/oauth-state.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { PrismaService } from "../prisma/prisma.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
@@ -14,6 +17,8 @@ export class TrpcController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly r2: R2Service,
+    private readonly oauthState: OAuthStateService,
+    private readonly config: ConfigService,
   ) {}
 
   @All("*path")
@@ -46,7 +51,14 @@ export class TrpcController {
       endpoint: "/trpc",
       req: fetchReq,
       router: appRouter,
-      createContext: () => createTrpcContext({ req: fetchReq, prisma: this.prisma, r2: this.r2 }),
+      createContext: () =>
+        createTrpcContext({
+          req: fetchReq,
+          prisma: this.prisma,
+          r2: this.r2,
+          oauthState: this.oauthState,
+          config: this.config,
+        }),
     });
 
     res.status(response.status);

@@ -10,6 +10,9 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "3.25.76"
+  },
   "devDependencies": {
     "@pulse/config": "workspace:*",
     "typescript": "5.9.3"

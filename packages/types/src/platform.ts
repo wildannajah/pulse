@@ -8,6 +8,8 @@
  * Stay in sync with the `Platform` Prisma enum in apps/api/prisma/schema.prisma.
  */
 
+import { z } from "zod";
+
 export type Platform =
   | "instagram"
   | "twitter"
@@ -36,3 +38,14 @@ export const PLATFORM_LIST: readonly Platform[] = [
   "tiktok",
   "youtube",
 ] as const;
+
+/** Zod enum for validating Platform values — source of truth for tRPC procedure inputs. */
+export const PlatformEnum = z.enum([
+  "instagram",
+  "twitter",
+  "facebook",
+  "linkedin",
+  "threads",
+  "tiktok",
+  "youtube",
+]);
