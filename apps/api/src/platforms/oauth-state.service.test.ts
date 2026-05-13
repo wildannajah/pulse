@@ -47,8 +47,13 @@ describe("OAuthStateService", () => {
     const svc = makeService();
     const token = svc.sign(BASE_PAYLOAD);
 
-    // Flip the last character of the signature
-    const tampered = token.slice(0, -1) + (token.endsWith("a") ? "b" : "a");
+    // Flip a character in the middle of the signature (last char can be padding bits)
+    const dotIdx = token.lastIndexOf(".");
+    const sig = token.slice(dotIdx + 1);
+    // Change the first char of the sig to a different base64url char
+    const firstSigChar = sig[0] ?? "a";
+    const tamperedSigChar = firstSigChar === "a" ? "b" : "a";
+    const tampered = token.slice(0, dotIdx + 1) + tamperedSigChar + sig.slice(1);
 
     expect(() => svc.verify(tampered)).toThrow(/signature mismatch/i);
   });
