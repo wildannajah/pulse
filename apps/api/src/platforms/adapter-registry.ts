@@ -1,6 +1,12 @@
 import type { Platform } from "@pulse/types/platform";
 
-import type { BasePlatformAdapter } from "./base-platform-adapter";
+import type {
+  AdapterResult,
+  BasePlatformAdapter,
+  BuildAuthorizationUrlInput,
+  ExchangeAuthCodeInput,
+  ExchangeAuthCodeOutput,
+} from "./base-platform-adapter";
 
 /**
  * Adapter registry — maps Platform → concrete adapter instance.
@@ -17,6 +23,12 @@ class NotImplementedAdapter implements BasePlatformAdapter {
     throw new Error(`Adapter for ${this.platform} is not implemented yet`);
   }
 
+  buildAuthorizationUrl(_input: BuildAuthorizationUrlInput): AdapterResult<{ url: string }> {
+    return this.fail();
+  }
+  exchangeAuthCode(_input: ExchangeAuthCodeInput): Promise<AdapterResult<ExchangeAuthCodeOutput>> {
+    return this.fail();
+  }
   publish() {
     return this.fail();
   }
