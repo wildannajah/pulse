@@ -100,7 +100,7 @@ Cuts across all phases. Some items block Phase 1 launch directly; others should 
 
 ### Hard launch blockers (Phase 1 cannot function without these)
 - [x] **Workers deployment** — `apps/workers` deployed as separate Railway service (same project as API, shares private Redis URL); Bull Board + basic auth; `post-publish` stub registered. `token-refresh`, `analytics-sync`, `inbox-sync` worker files still needed.
-- [~] **Cloudflare R2 (or S3) bucket** — `r2.service.ts` (presignPut / presignGet / deleteObject / publicUrl) implemented; `scripts/test-r2.ts` smoke test exists; bucket likely provisioned — *needs out-of-band verification*.
+- [x] **Cloudflare R2 (or S3) bucket** — provisioned; `r2.service.ts` (presignPut / presignGet / deleteObject / publicUrl) implemented; `scripts/test-r2.ts` connectivity smoke test passes.
 - [x] **Signed-URL upload flow** — `r2.service.ts` presigned URLs + `mediaRouter.requestUpload` / `confirmUpload` tRPC procedures with `{workspaceId}/{brandId}/...` tenant-prefix guard.
 
 ### Strongly recommended for launch (beta survivable without; not GA-ready without)
@@ -386,13 +386,13 @@ These run in parallel with Phase 1–3 dev. Don't ship without them.
 ## Quick scoreboard
 
 - **Foundation (Phase 0):** 34 of ~35 active done — `platform-constraints.ts` and `event-types.ts` both shipped; remaining: BullMQ queues [~] (post-publish stub + 3 worker files missing), JobLog wiring, design wireframes, `@pulse/ui` Button/Input/Card primitives; product-analytics section (9 items) on hold and not counted
-- **Infrastructure:** 9 of ~22 done — workers deployment [x] + signed-URL flow [x] + workers hosting decision [x] added; R2 bucket [~] (code done, bucket likely provisioned); all hard launch blockers resolved pending R2 out-of-band confirm
+- **Infrastructure:** 10 of ~22 done — workers deployment [x] + R2 bucket [x] + signed-URL flow [x] + workers hosting decision [x] all added; all 3 hard launch blockers resolved
 - **Phase 1:** 8 of ~85 done — `BasePlatformAdapter` interface [x] added; 13 UI items moved to [~] (pages exist with mock data); adapter registry + media upload backend [~]
 - **Phase 2:** 0 of ~40 done
 - **Phase 3:** 0 of ~30 done (3G "Programmatic access" flagged as out-of-PRD; 4 items there don't count toward Phase 3 burn-down)
 - **Pre-launch:** 0 of ~12 done
 
-Total surface area: ~215 trackable items. Foundation is ~97% complete — remaining: BullMQ queues (token-refresh/analytics-sync/inbox-sync worker files don't exist), JobLog wiring, design wireframes, `@pulse/ui` Button/Input/Card layer. R2/media backend done; Sentry, CI, Storybook deploy still needed.
+Total surface area: ~215 trackable items. Foundation is ~97% complete — remaining: BullMQ queues (token-refresh/analytics-sync/inbox-sync worker files don't exist), JobLog wiring, design wireframes, `@pulse/ui` Button/Input/Card layer. R2/media backend fully done; Sentry, CI, Storybook deploy still needed.
 
 **Next up (as of 2026-05-13, in priority order):**
 
@@ -415,7 +415,7 @@ Every item in this list is server-only, fully testable via Vitest + tRPC's `appR
 Audited against `main` codebase. Changes made:
 
 - **Phase 0 / Remaining:** `platform-constraints.ts` `[ ]` → `[x]` (file fully populated per ground truth). BullMQ queues `[ ]` → `[~]` (post-publish stub registered + Bull Board lists all 4 names; token-refresh/analytics-sync/inbox-sync worker files don't exist). `@pulse/ui` note updated: design system is live; BrandMark/BrandLockup/PlatformIcon shipped but Button/Input/Card primitives not yet added.
-- **Infrastructure / Hard launch blockers:** Workers deployment `[ ]` → `[x]` (deployed to Railway per internal-todo.md Phase E). R2 bucket `[ ]` → `[~]` (r2.service.ts + test-r2.ts smoke test exist; bucket likely provisioned, needs out-of-band confirm). Signed-URL upload flow `[ ]` → `[x]` (r2.service.ts + mediaRouter.requestUpload/confirmUpload done).
+- **Infrastructure / Hard launch blockers:** Workers deployment `[ ]` → `[x]` (deployed to Railway per internal-todo.md Phase E). R2 bucket `[ ]` → `[x]` (bucket provisioned; r2.service.ts + test-r2.ts smoke test confirm). Signed-URL upload flow `[ ]` → `[x]` (r2.service.ts + mediaRouter.requestUpload/confirmUpload done). All 3 hard launch blockers now `[x]`.
 - **Infrastructure / Open infra questions:** Workers hosting `[ ]` → `[x]` (decision made: Railway separate service).
 - **Phase 1 / 1A:** Brand switcher UI `[ ]` → `[~]` (sidebar.tsx has brand switcher dropdown; design unblocked; mock data only). Workspace switcher stays `[ ]` (confirmed not built).
 - **Phase 1 / 1B:** BasePlatformAdapter interface `[ ]` → `[x]` (base-platform-adapter.ts fully defined). Platform adapter registry `[ ]` → `[~]` (adapter-registry.ts exists; returns NotImplementedAdapter for all 7 platforms).
