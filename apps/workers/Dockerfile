@@ -18,6 +18,8 @@ RUN cd apps/workers && pnpm build && echo "Build OK" && ls dist/
 FROM node:20-slim AS runner
 WORKDIR /app
 
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=builder /app/packages/ ./packages/
