@@ -195,7 +195,7 @@ export const postRouter = router({
 
       const queuedJobIds = await Promise.all(
         post.publications.map((pub) => {
-          const idempotencyKey = `post-publish:${pub.id}`;
+          const idempotencyKey = `post-publish-${pub.id}`;
           return ctx.postPublishQueue.enqueue({
             brandId: ctx.brand.id,
             postId: post.id,
