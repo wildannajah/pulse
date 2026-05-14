@@ -412,12 +412,24 @@ export class TwitterAdapter implements BasePlatformAdapter {
 
       raw = await resp.json().catch(() => null);
 
-      if (resp.status === 401 || resp.status === 403) {
+      if (resp.status === 401) {
         return {
           ok: false,
           error: {
             kind: "auth_expired",
-            message: "Twitter rejected media upload — token may need media.write scope",
+            message: "Twitter rejected media upload — token is expired or revoked",
+            raw,
+          },
+        };
+      }
+
+      if (resp.status === 403) {
+        return {
+          ok: false,
+          error: {
+            kind: "validation_failed",
+            message:
+              "Twitter rejected media upload — reconnect your account to grant the media.write scope",
             raw,
           },
         };

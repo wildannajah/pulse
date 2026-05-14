@@ -171,6 +171,14 @@ export const postPublishWorker = new Worker<PostPublishJob>(
     const result = await adapter.publish(credential, publishInput);
     const durationMs = Date.now() - startMs;
 
+    if (!result.ok) {
+      console.error(`[post-publish] platform error for ${idempotencyKey}`, {
+        kind: result.error.kind,
+        message: result.error.message,
+        raw: JSON.stringify(result.error.raw ?? null),
+      });
+    }
+
     // Step 6 — Handle success
     if (result.ok) {
       await prisma.postPublication.update({

@@ -1,5 +1,5 @@
 /**
- * Standalone AES-256-GCM decrypt for the workers process.
+ * Standalone AES-256-GCM encrypt/decrypt for the workers process.
  *
  * This duplicates the logic from apps/api/src/encryption/encryption.service.ts
  * without the NestJS @Injectable wrapper. Workers are not a NestJS app, so they
@@ -9,7 +9,7 @@
  * so both apps/api and apps/workers share a single implementation.
  */
 
-import { createDecipheriv } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -21,6 +21,18 @@ function getKey(): Buffer {
     throw new Error("ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)");
   }
   return Buffer.from(hex, "hex");
+}
+
+export function encrypt(plaintext: string): string {
+  const key = getKey();
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  // Format: base64(iv || ciphertext || authTag)
+  return Buffer.concat([iv, encrypted, authTag]).toString("base64");
 }
 
 export function decrypt(ciphertext: string): string {
