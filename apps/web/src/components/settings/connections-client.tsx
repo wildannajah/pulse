@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/app/page-header";
 import { PlatformConnectionCard } from "@/components/settings/platform-connection-card";
 import { trpc } from "@/lib/trpc/trpc";
+import { useBrandStore } from "@/stores/brand-store";
 
 const PLATFORMS: { platform: Platform; enabled: boolean }[] = [
   { platform: "twitter", enabled: true },
@@ -39,7 +40,10 @@ export function ConnectionsClient() {
   const searchParams = useSearchParams();
   const toastShownRef = useRef(false);
 
-  const listQuery = trpc.connectedAccount.list.useQuery();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const listQuery = trpc.connectedAccount.list.useQuery(undefined, {
+    enabled: !!activeBrandId,
+  });
 
   const startOAuth = trpc.connectedAccount.startOAuth.useMutation({
     onSuccess: ({ authorizationUrl }) => {

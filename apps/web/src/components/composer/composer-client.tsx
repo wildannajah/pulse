@@ -8,13 +8,17 @@ import { toast } from "sonner";
 import { TextEditor } from "@/components/composer/text-editor";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/trpc";
+import { useBrandStore } from "@/stores/brand-store";
 
 const TWITTER_LIMIT = 280;
 
 export function ComposerClient() {
   const [text, setText] = useState("");
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
-  const accountsQuery = trpc.connectedAccount.list.useQuery();
+  const accountsQuery = trpc.connectedAccount.list.useQuery(undefined, {
+    enabled: !!activeBrandId,
+  });
   const postCreate = trpc.post.create.useMutation();
   const postPublishNow = trpc.post.publishNow.useMutation();
 

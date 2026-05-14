@@ -9,9 +9,13 @@ import { EmptyState } from "@/components/app/empty-state";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/trpc";
+import { useBrandStore } from "@/stores/brand-store";
 
 export default function DashboardPage() {
-  const accountsQuery = trpc.connectedAccount.list.useQuery();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
+  const accountsQuery = trpc.connectedAccount.list.useQuery(undefined, {
+    enabled: !!activeBrandId,
+  });
   const hasAccounts = (accountsQuery.data?.length ?? 0) > 0;
 
   return (

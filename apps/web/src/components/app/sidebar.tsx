@@ -62,9 +62,10 @@ export function Sidebar({ user }: SidebarProps) {
   const brandsQuery = trpc.brand.list.useQuery();
 
   useEffect(() => {
-    if (!activeBrandId && brandsQuery.data?.[0]) {
-      setActiveBrandId(brandsQuery.data[0].id);
-    }
+    const brands = brandsQuery.data;
+    if (!brands?.length) return;
+    const isValid = brands.some((b) => b.id === activeBrandId);
+    if (!isValid) setActiveBrandId(brands[0].id);
   }, [activeBrandId, setActiveBrandId, brandsQuery.data]);
 
   const activeBrand =
