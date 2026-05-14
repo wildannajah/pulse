@@ -1,15 +1,9 @@
+import { PlatformEnum } from "@pulse/types/platform";
+import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { brandProcedure, router } from "../trpc";
-
-/**
- * Post router — brand-scoped post lifecycle.
- *
- * Read paths are wired against Prisma so the calendar, posts, and dashboard
- * pages can swap mock data for real queries. Write paths surface the contract
- * but throw NOT_IMPLEMENTED until 1C composer/scheduler lands.
- */
 
 const PostStatusFilter = z.enum(["draft", "scheduled", "published", "failed"]).optional();
 
@@ -50,30 +44,91 @@ export const postRouter = router({
     return post;
   }),
 
-  /** Create a draft. Mutation contract only — full implementation in 1C. */
+  /** Create a post (draft or scheduled) with per-platform publications. */
   create: brandProcedure
     .input(
       z.object({
-        text: z.string().max(63206), // largest platform char limit
-        platforms: z
-          .array(
-            z.enum([
-              "instagram",
-              "twitter",
-              "facebook",
-              "linkedin",
-              "threads",
-              "tiktok",
-              "youtube",
-            ]),
-          )
-          .min(1),
+        text: z.string().min(1).max(63206),
+        platforms: z.array(PlatformEnum).min(1),
         scheduledAt: z.date().optional(),
         mediaKeys: z.array(z.string()).max(10).default([]),
       }),
     )
-    .mutation(async () => {
-      throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "post.create — Phase 1C" });
+    .mutation(async ({ ctx, input }) => {
+      if (input.mediaKeys.length > 0) {
+        console.warn(
+          "[post.create] mediaKeys ignored — R2 media upload lands in Phase D",
+          input.mediaKeys,
+        );
+      }
+
+      if (input.scheduledAt && input.scheduledAt <= new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "scheduledAt must be in the future" });
+      }
+
+      // Per-platform text validation
+      for (const platform of input.platforms) {
+        const constraint = PLATFORM_CONSTRAINTS[platform];
+        if (input.text.length > constraint.charLimit) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${constraint.name} content exceeds ${constraint.charLimit} characters`,
+          });
+        }
+      }
+
+      // Resolve connected accounts for all requested platforms
+      const connectedAccounts = await Promise.all(
+        input.platforms.map(async (platform) => {
+          const account = await ctx.prisma.connectedAccount.findFirst({
+            where: {
+              brandId: ctx.brand.id,
+              platform: platform.toUpperCase() as never,
+              status: "ACTIVE",
+              deletedAt: null,
+            },
+          });
+          if (!account) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No active ${platform} account connected to this brand`,
+            });
+          }
+          return account;
+        }),
+      );
+
+      const status = input.scheduledAt ? ("SCHEDULED" as const) : ("DRAFT" as const);
+
+      const { post, publicationIds } = await ctx.prisma.$transaction(async (tx) => {
+        const created = await tx.post.create({
+          data: {
+            brandId: ctx.brand.id,
+            authorId: ctx.user.id,
+            content: input.text,
+            status,
+            scheduledAt: input.scheduledAt ?? null,
+            timezone: "UTC",
+          },
+        });
+
+        const publications = await Promise.all(
+          connectedAccounts.map((account) =>
+            tx.postPublication.create({
+              data: {
+                postId: created.id,
+                connectedAccountId: account.id,
+                platform: account.platform,
+                status: "SCHEDULED",
+              },
+            }),
+          ),
+        );
+
+        return { post: created, publicationIds: publications.map((p) => p.id) };
+      });
+
+      return { id: post.id, status: post.status, publicationIds };
     }),
 
   /** Schedule or reschedule. */
@@ -83,10 +138,76 @@ export const postRouter = router({
       throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "post.schedule — Phase 1C" });
     }),
 
-  /** Publish-now path (bypasses scheduler, enqueues immediately). */
-  publishNow: brandProcedure.input(z.object({ id: z.string() })).mutation(async () => {
-    throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "post.publishNow — Phase 1C" });
-  }),
+  /** Publish immediately — transitions post to PUBLISHING and enqueues one job per platform. */
+  publishNow: brandProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const post = await ctx.prisma.post.findFirst({
+        where: { id: input.id, brandId: ctx.brand.id, deletedAt: null },
+        include: {
+          publications: {
+            include: { connectedAccount: true },
+          },
+        },
+      });
+
+      if (!post) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" });
+      }
+
+      if (
+        post.status === "PUBLISHING" ||
+        post.status === "PUBLISHED" ||
+        post.status === "PARTIALLY_FAILED"
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Post cannot be published again — current status: ${post.status}`,
+        });
+      }
+
+      const expiredPlatforms = post.publications
+        .filter((pub) => pub.connectedAccount.status !== "ACTIVE")
+        .map((pub) => pub.connectedAccount.platform.toLowerCase());
+
+      if (expiredPlatforms.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `The following platforms need reconnection: ${expiredPlatforms.join(", ")}`,
+        });
+      }
+
+      await ctx.prisma.$transaction(async (tx) => {
+        await tx.post.update({
+          where: { id: post.id },
+          data: { status: "PUBLISHING" },
+        });
+
+        await Promise.all(
+          post.publications.map((pub) =>
+            tx.postPublication.update({
+              where: { id: pub.id },
+              data: { status: "SCHEDULED" },
+            }),
+          ),
+        );
+      });
+
+      const queuedJobIds = await Promise.all(
+        post.publications.map((pub) => {
+          const idempotencyKey = `post-publish:${pub.id}`;
+          return ctx.postPublishQueue.enqueue({
+            brandId: ctx.brand.id,
+            postId: post.id,
+            publicationId: pub.id,
+            platform: pub.connectedAccount.platform.toLowerCase() as never,
+            idempotencyKey,
+          });
+        }),
+      );
+
+      return { id: post.id, status: "PUBLISHING" as const, queuedJobIds };
+    }),
 
   delete: brandProcedure.input(z.object({ id: z.string() })).mutation(async () => {
     throw new TRPCError({ code: "NOT_IMPLEMENTED", message: "post.delete — Phase 1C" });

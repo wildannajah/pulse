@@ -4,6 +4,7 @@ import { resolveBrand } from "../auth/brand-resolver";
 import { resolveSession } from "../auth/session-resolver";
 import type { EncryptionService } from "../encryption/encryption.service";
 import type { OAuthStateService } from "../platforms/oauth-state.service";
+import type { PostPublishQueueService } from "../queues/post-publish-queue.service";
 import type { R2Service } from "../storage/r2.service";
 
 export type TrpcContext = {
@@ -15,6 +16,7 @@ export type TrpcContext = {
   oauthState: OAuthStateService;
   config: ConfigService;
   encryption: EncryptionService;
+  postPublishQueue: PostPublishQueueService;
 };
 
 export async function createTrpcContext(opts: {
@@ -24,6 +26,7 @@ export async function createTrpcContext(opts: {
   oauthState: OAuthStateService;
   config: ConfigService;
   encryption: EncryptionService;
+  postPublishQueue: PostPublishQueueService;
 }): Promise<TrpcContext> {
   const authHeader = opts.req.headers.get("authorization");
   const brandIdHeader = opts.req.headers.get("x-brand-id");
@@ -40,5 +43,6 @@ export async function createTrpcContext(opts: {
     oauthState: opts.oauthState,
     config: opts.config,
     encryption: opts.encryption,
+    postPublishQueue: opts.postPublishQueue,
   };
 }

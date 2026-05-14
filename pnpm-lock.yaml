@@ -56,6 +56,12 @@ importers:
       '@trpc/server':
         specifier: ^11.16.0
         version: 11.16.0(typescript@5.9.3)
+      bullmq:
+        specifier: ^5.76.2
+        version: 5.76.2
+      ioredis:
+        specifier: ^5.10.1
+        version: 5.10.1
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
