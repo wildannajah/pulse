@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
+import { MediaUploader, type UploadedMedia } from "@/components/composer/media-uploader";
 import { TextEditor } from "@/components/composer/text-editor";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/trpc";
@@ -14,6 +15,7 @@ const TWITTER_LIMIT = 280;
 
 export function ComposerClient() {
   const [text, setText] = useState("");
+  const [media, setMedia] = useState<UploadedMedia[]>([]);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
   const accountsQuery = trpc.connectedAccount.list.useQuery(undefined, {
@@ -37,11 +39,12 @@ export function ComposerClient() {
       const created = (await postCreate.mutateAsync({
         text,
         platforms: ["twitter"],
-        mediaKeys: [],
+        mediaKeys: media.map((m) => m.storageKey),
       })) as { id: string; status: string };
       await postPublishNow.mutateAsync({ id: created.id });
       toast.success("Tweet queued — publishing now");
       setText("");
+      setMedia([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to publish");
     }
@@ -52,10 +55,11 @@ export function ComposerClient() {
       await postCreate.mutateAsync({
         text,
         platforms: ["twitter"],
-        mediaKeys: [],
+        mediaKeys: media.map((m) => m.storageKey),
       });
       toast.success("Draft saved");
       setText("");
+      setMedia([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save draft");
     }
@@ -84,6 +88,9 @@ export function ComposerClient() {
             Twitter/X
           </div>
         </div>
+
+        {/* Media uploader */}
+        <MediaUploader value={media} onChange={setMedia} maxItems={4} disabled={isMutating} />
 
         {/* Warning: no connected twitter */}
         {!accountsQuery.isLoading && !hasActiveTwitter ? (
@@ -125,6 +132,19 @@ export function ComposerClient() {
           <p className="min-h-[80px] text-[13px] leading-relaxed text-foreground">
             {text || <span className="text-muted-foreground">Your tweet will appear here…</span>}
           </p>
+          {media.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              {media.map((m) => (
+                // biome-ignore lint/performance/noImgElement: R2 CDN domain not configured in next/image
+                <img
+                  key={m.storageKey}
+                  src={m.url}
+                  alt={m.filename}
+                  className="h-24 w-full rounded object-cover"
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

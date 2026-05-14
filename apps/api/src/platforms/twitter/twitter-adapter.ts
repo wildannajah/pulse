@@ -14,18 +14,21 @@ import type {
   InboxItem,
   ProfileSnapshot,
   PublishInput,
+  PublishMediaInput,
   PublishOutput,
   ReplyInput,
   ReplyOutput,
 } from "../base-platform-adapter";
 import type {
   TwitterErrorResponse,
+  TwitterMediaUploadResponse,
   TwitterTokenResponse,
   TwitterTweetResponse,
   TwitterUserResponse,
 } from "./twitter-api-types";
 
 const TOKEN_URL = "https://api.x.com/2/oauth2/token";
+const MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json";
 const REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 const USER_ME_URL = "https://api.x.com/2/users/me?user.fields=profile_image_url,url,name,username";
 const TWEETS_URL = "https://api.x.com/2/tweets";
@@ -201,15 +204,29 @@ export class TwitterAdapter implements BasePlatformAdapter {
     credential: AdapterCredential,
     input: PublishInput,
   ): Promise<AdapterResult<PublishOutput>> {
-    if (input.media.length > 0) {
+    if (input.media.length > 4) {
       return {
         ok: false,
         error: {
           kind: "validation_failed",
-          message:
-            "Media uploads are not yet supported for Twitter. Phase C is text-only. Media support lands in a follow-up.",
+          message: "Twitter allows at most 4 media items per tweet",
         },
       };
+    }
+
+    // Upload each media item in sequence (Twitter rate-limits parallel uploads heavily)
+    const mediaIds: string[] = [];
+    for (const m of input.media) {
+      const uploadResult = await this.uploadMedia(credential, m);
+      if (!uploadResult.ok) {
+        return uploadResult;
+      }
+      mediaIds.push(uploadResult.value);
+    }
+
+    const tweetBody: { text: string; media?: { media_ids: string[] } } = { text: input.text };
+    if (mediaIds.length > 0) {
+      tweetBody.media = { media_ids: mediaIds };
     }
 
     let raw: unknown;
@@ -220,7 +237,7 @@ export class TwitterAdapter implements BasePlatformAdapter {
           Authorization: `Bearer ${credential.accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: input.text }),
+        body: JSON.stringify(tweetBody),
       });
 
       raw = await resp.json().catch(() => null);
@@ -320,6 +337,130 @@ export class TwitterAdapter implements BasePlatformAdapter {
   // ────────────────────────────────────────────────────────────────────────────
   // Internal helpers
   // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Uploads one media asset to X.com via the v1.1 simple-upload endpoint.
+   * Returns the platform's media_id_string.
+   *
+   * Simple upload works for images ≤ 5MB (JPEG, PNG, WEBP, GIF non-animated).
+   * Video and oversized assets return validation_failed — chunked upload is a follow-up.
+   */
+  private async uploadMedia(
+    credential: AdapterCredential,
+    media: PublishMediaInput,
+  ): Promise<AdapterResult<string>> {
+    if (media.kind === "video") {
+      return {
+        ok: false,
+        error: {
+          kind: "validation_failed",
+          message: "Video uploads to Twitter require chunked upload — lands in a follow-up.",
+        },
+      };
+    }
+
+    let assetBytes: Blob;
+    try {
+      const downloadResp = await fetch(media.url);
+      if (!downloadResp.ok) {
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: `Failed to download media from R2: HTTP ${downloadResp.status}`,
+          },
+        };
+      }
+      assetBytes = await downloadResp.blob();
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "network_error",
+          message: err instanceof Error ? err.message : "Unknown network error downloading media",
+          raw: err,
+        },
+      };
+    }
+
+    const MAX_SIMPLE_UPLOAD_BYTES = 5 * 1024 * 1024;
+    if (assetBytes.size > MAX_SIMPLE_UPLOAD_BYTES) {
+      return {
+        ok: false,
+        error: {
+          kind: "validation_failed",
+          message: `Image exceeds 5MB simple-upload limit (${assetBytes.size} bytes). Chunked upload lands in a follow-up.`,
+        },
+      };
+    }
+
+    const form = new FormData();
+    form.append(
+      "media",
+      new Blob([assetBytes], { type: media.mimeType }),
+      media.filename ?? "upload",
+    );
+    form.append("media_category", "tweet_image");
+
+    let raw: unknown;
+    try {
+      const resp = await fetch(MEDIA_UPLOAD_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${credential.accessToken}` },
+        body: form,
+      });
+
+      raw = await resp.json().catch(() => null);
+
+      if (resp.status === 401 || resp.status === 403) {
+        return {
+          ok: false,
+          error: {
+            kind: "auth_expired",
+            message: "Twitter rejected media upload — token may need media.write scope",
+            raw,
+          },
+        };
+      }
+
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get("retry-after");
+        return {
+          ok: false,
+          error: {
+            kind: "rate_limited",
+            message: "Twitter media upload rate limited",
+            raw,
+            retryAfterSeconds: retryAfter ? Number(retryAfter) : 60,
+          },
+        };
+      }
+
+      if (!resp.ok) {
+        const err = raw as TwitterErrorResponse | null;
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: err?.detail ?? err?.title ?? `Twitter media upload HTTP ${resp.status}`,
+            raw,
+          },
+        };
+      }
+
+      const body = raw as TwitterMediaUploadResponse;
+      return { ok: true, value: body.media_id_string };
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "network_error",
+          message: err instanceof Error ? err.message : "Unknown network error during media upload",
+          raw: err,
+        },
+      };
+    }
+  }
 
   private get basicAuth(): string {
     return Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
