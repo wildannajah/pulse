@@ -32,7 +32,16 @@ export const postPublishWorker = new Worker<PostPublishJob>(
     const publication = await prisma.postPublication.findUnique({
       where: { id: publicationId },
       include: {
-        post: { select: { content: true, brandId: true } },
+        post: {
+          select: {
+            content: true,
+            brandId: true,
+            media: {
+              where: { type: { not: "DOCUMENT" } },
+              orderBy: { position: "asc" },
+            },
+          },
+        },
         connectedAccount: true,
       },
     });
@@ -122,7 +131,13 @@ export const postPublishWorker = new Worker<PostPublishJob>(
     const publishInput: PublishInput = {
       idempotencyKey,
       text: post.content,
-      media: [],
+      media: post.media.map((m) => ({
+        key: m.storageKey,
+        kind: m.type === "VIDEO" ? "video" : "image",
+        filename: m.fileName,
+        url: m.url,
+        mimeType: m.mimeType,
+      })),
       platformUserId: connectedAccount.platformUserId,
       platformPageId: connectedAccount.platformPageId ?? undefined,
     };

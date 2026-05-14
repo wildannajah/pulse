@@ -7,6 +7,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 COPY packages/ ./packages/
 COPY apps/workers/ ./apps/workers/
 COPY apps/api/prisma/ ./apps/api/prisma/
+COPY apps/api/src/ ./apps/api/src/
 
 RUN pnpm install --frozen-lockfile
 
