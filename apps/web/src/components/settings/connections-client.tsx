@@ -12,8 +12,8 @@ import { useBrandStore } from "@/stores/brand-store";
 
 const PLATFORMS: { platform: Platform; enabled: boolean }[] = [
   { platform: "twitter", enabled: true },
-  { platform: "instagram", enabled: false },
-  { platform: "facebook", enabled: false },
+  { platform: "instagram", enabled: true },
+  { platform: "facebook", enabled: true },
   { platform: "linkedin", enabled: false },
   { platform: "threads", enabled: false },
   { platform: "tiktok", enabled: false },
