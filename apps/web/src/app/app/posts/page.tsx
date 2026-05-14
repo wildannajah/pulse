@@ -1,6 +1,8 @@
 "use client";
 
 import { PLATFORM_CONSTRAINTS, PLATFORM_LIST } from "@pulse/types/platform-constraints";
+import type { PostStatus } from "@pulse/types/post-status";
+import { mapPrismaStatusToUiStatus } from "@pulse/types/post-status";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import {
   Check,
@@ -14,11 +16,13 @@ import {
   Plus,
   Search,
 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import { EmptyState } from "@/components/app/empty-state";
 import { PageHeader } from "@/components/app/page-header";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { MOCK_POSTS, type MockPost, type PostStatus } from "@/lib/mock-data";
+import { trpc } from "@/lib/trpc/trpc";
 import { cn } from "@/lib/utils/cn";
 
 type StatusFilter = PostStatus | "all";
@@ -28,6 +32,15 @@ type ViewMode = "grid" | "list";
 
 const HEART_ACTIVE = "oklch(0.52 0.22 275)";
 
+type RealPost = {
+  id: string;
+  content: string;
+  status: string;
+  scheduledAt: Date | null;
+  publishedAt: Date | null;
+  createdAt: Date;
+};
+
 export default function PostsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -36,21 +49,25 @@ export default function PostsPage() {
   const [view, setView] = useState<ViewMode>("grid");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  const postsQuery = trpc.post.list.useQuery({ limit: 50 });
+  const posts: RealPost[] = postsQuery.data?.posts ?? [];
+
   const filtered = useMemo(() => {
-    return MOCK_POSTS.filter((p) => {
-      if (search && !p.content.toLowerCase().includes(search.toLowerCase())) return false;
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
-      if (platformFilter !== "all" && !p.platforms.includes(platformFilter)) return false;
-      return true;
-    }).sort((a, b) => {
-      if (sort === "date-desc") return (b.date ?? "").localeCompare(a.date ?? "");
-      if (sort === "date-asc") return (a.date ?? "").localeCompare(b.date ?? "");
-      if (sort === "likes") return b.likes - a.likes;
-      if (sort === "reach") return b.reach - a.reach;
-      if (sort === "comments") return b.comments - a.comments;
-      return 0;
-    });
-  }, [search, statusFilter, platformFilter, sort]);
+    return posts
+      .filter((p) => {
+        if (search && !p.content.toLowerCase().includes(search.toLowerCase())) return false;
+        if (statusFilter !== "all" && mapPrismaStatusToUiStatus(p.status) !== statusFilter)
+          return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const aDate = a.scheduledAt ?? a.createdAt;
+        const bDate = b.scheduledAt ?? b.createdAt;
+        if (sort === "date-desc") return bDate.getTime() - aDate.getTime();
+        if (sort === "date-asc") return aDate.getTime() - bDate.getTime();
+        return 0;
+      });
+  }, [posts, search, statusFilter, sort]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -71,15 +88,16 @@ export default function PostsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader title="Posts">
-        <Button size="sm">
-          <Plus size={14} />
-          New post
+        <Button size="sm" asChild>
+          <Link href="/app/composer">
+            <Plus size={14} />
+            New post
+          </Link>
         </Button>
       </PageHeader>
 
       {/* Filter bar */}
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2.5 border-border border-b bg-card px-7 py-2.5">
-        {/* Search */}
         <div className="flex min-w-[200px] items-center gap-1.5 rounded-md bg-secondary px-2.5 py-1.5">
           <Search size={13} className="text-muted-foreground" />
           <input
@@ -90,7 +108,6 @@ export default function PostsPage() {
           />
         </div>
 
-        {/* Status filter */}
         <div className="flex gap-1">
           {STATUSES.map((s) => (
             <ChipBtn
@@ -105,7 +122,6 @@ export default function PostsPage() {
 
         <div className="h-5 w-px bg-border" />
 
-        {/* Platform filter */}
         <div className="flex items-center gap-1">
           <ChipBtn active={platformFilter === "all"} onClick={() => setPlatformFilter("all")}>
             All platforms
@@ -139,9 +155,6 @@ export default function PostsPage() {
           >
             <option value="date-desc">Newest first</option>
             <option value="date-asc">Oldest first</option>
-            <option value="likes">Most likes</option>
-            <option value="reach">Most reach</option>
-            <option value="comments">Most comments</option>
           </select>
           {(["grid", "list"] as ViewMode[]).map((v) => (
             <button
@@ -195,10 +208,23 @@ export default function PostsPage() {
 
       {/* Posts */}
       <div className="flex-1 overflow-y-auto px-7 py-5">
-        {filtered.length === 0 ? (
-          <div className="py-15 text-center text-[14px] text-muted-foreground">
-            No posts match your filters.
+        {postsQuery.isLoading ? (
+          <div className={view === "grid" ? "grid grid-cols-3 gap-3.5" : "flex flex-col gap-2"}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-48 animate-pulse rounded-lg border border-border bg-card" />
+            ))}
           </div>
+        ) : filtered.length === 0 ? (
+          posts.length === 0 ? (
+            <EmptyState
+              title="No posts yet — write your first one"
+              action={{ label: "New post", href: "/app/composer" }}
+            />
+          ) : (
+            <div className="py-15 text-center text-[14px] text-muted-foreground">
+              No posts match your filters.
+            </div>
+          )
         ) : view === "grid" ? (
           <div className="grid grid-cols-3 gap-3.5">
             {filtered.map((post) => (
@@ -253,19 +279,23 @@ function ChipBtn({
   );
 }
 
+function formatDate(d: Date | null): string | null {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function PostGridCard({
   post,
   selected,
   onSelect,
 }: {
-  post: MockPost;
+  post: RealPost;
   selected: boolean;
   onSelect: () => void;
 }) {
   const [liked, setLiked] = useState(false);
-  const [localLikes, setLocalLikes] = useState(post.likes);
-  const [activePlatform, setActivePlatform] = useState<Platform>(post.platforms[0]!);
-  const meta = PLATFORM_CONSTRAINTS[activePlatform];
+  const uiStatus = mapPrismaStatusToUiStatus(post.status);
+  const displayDate = formatDate(post.scheduledAt ?? post.publishedAt ?? post.createdAt);
 
   return (
     <div
@@ -282,7 +312,6 @@ function PostGridCard({
           : undefined
       }
     >
-      {/* Select checkbox */}
       <button
         type="button"
         onClick={onSelect}
@@ -295,80 +324,25 @@ function PostGridCard({
         {selected ? <Check size={10} className="text-white" strokeWidth={3} /> : null}
       </button>
 
-      {/* Image */}
       <div className="relative flex h-[100px] items-center justify-center bg-secondary">
         <ImageIcon size={24} className="text-border" />
         <div className="absolute top-2 left-2">
-          <StatusBadge status={post.status} />
+          <StatusBadge status={uiStatus} />
         </div>
       </div>
 
-      {/* Platform tabs */}
-      {post.platforms.length > 1 ? (
-        <div className="flex flex-wrap gap-1 px-2.5 pt-2">
-          {post.platforms.map((plat) => {
-            const m = PLATFORM_CONSTRAINTS[plat];
-            const active = activePlatform === plat;
-            return (
-              <button
-                type="button"
-                key={plat}
-                onClick={() => setActivePlatform(plat)}
-                className="flex items-center gap-1 rounded-full px-1.5 py-px font-medium text-[10px] transition-all"
-                style={{
-                  border: active ? `1.5px solid ${m.color}50` : "1.5px solid var(--border)",
-                  background: active ? m.chipBg : "transparent",
-                  color: active ? m.chipText : "var(--muted-foreground)",
-                }}
-              >
-                <PlatformIcon platform={plat} size={11} />
-                {m.name}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 px-2.5 pt-2">
-          <PlatformIcon platform={post.platforms[0]!} size={12} />
-          <span
-            className="rounded-full px-1.5 py-px font-medium text-[10px]"
-            style={{ background: meta.chipBg, color: meta.chipText }}
-          >
-            {meta.name}
-          </span>
-        </div>
-      )}
-
-      {/* Body */}
       <div className="flex flex-1 flex-col gap-1.5 px-2.5 pt-2 pb-2.5">
         <p className="line-clamp-2 text-[12px] leading-snug text-foreground">{post.content}</p>
-        {post.date ? (
+        {displayDate ? (
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
             <Clock size={10} />
-            {post.date} · {post.time}
-          </div>
-        ) : null}
-        {post.status === "published" ? (
-          <div className="flex gap-2.5 border-border border-t pt-1">
-            {[
-              { v: localLikes, l: "Likes" },
-              { v: post.comments, l: "Comments" },
-              { v: post.reach.toLocaleString(), l: "Reach" },
-            ].map((s) => (
-              <div key={s.l} className="flex-1">
-                <div className="text-[12px] font-bold text-foreground">{s.v}</div>
-                <div className="text-[9px] text-muted-foreground">{s.l}</div>
-              </div>
-            ))}
+            {displayDate}
           </div>
         ) : null}
         <div className="-mx-1 flex items-center gap-0 pt-0.5">
           <button
             type="button"
-            onClick={() => {
-              setLiked(!liked);
-              setLocalLikes((n) => (liked ? n - 1 : n + 1));
-            }}
+            onClick={() => setLiked(!liked)}
             className="flex items-center gap-1 rounded-sm px-1.5 py-px text-[11px] font-medium"
             style={{ color: liked ? HEART_ACTIVE : "var(--muted-foreground)" }}
           >
@@ -402,13 +376,14 @@ function PostListRow({
   onSelect,
   isLast,
 }: {
-  post: MockPost;
+  post: RealPost;
   selected: boolean;
   onSelect: () => void;
   isLast: boolean;
 }) {
   const [liked, setLiked] = useState(false);
-  const [localLikes, setLocalLikes] = useState(post.likes);
+  const uiStatus = mapPrismaStatusToUiStatus(post.status);
+  const displayDate = formatDate(post.scheduledAt ?? post.publishedAt ?? post.createdAt);
 
   return (
     <div
@@ -435,40 +410,16 @@ function PostListRow({
       <div className="min-w-0 flex-1">
         <div className="mb-0.5 truncate text-[13px] text-foreground">{post.content}</div>
         <div className="flex items-center gap-1.5">
-          <div className="flex gap-0.5">
-            {post.platforms.map((p) => (
-              <PlatformIcon key={p} platform={p} size={13} />
-            ))}
-          </div>
-          <StatusBadge status={post.status} />
-          {post.date ? (
-            <span className="text-[11px] text-muted-foreground">
-              {post.date} · {post.time}
-            </span>
+          <StatusBadge status={uiStatus} />
+          {displayDate ? (
+            <span className="text-[11px] text-muted-foreground">{displayDate}</span>
           ) : null}
         </div>
       </div>
-      {post.status === "published" ? (
-        <div className="flex flex-shrink-0 gap-4">
-          {[
-            { v: localLikes, l: "Likes" },
-            { v: post.comments, l: "Comments" },
-            { v: post.reach.toLocaleString(), l: "Reach" },
-          ].map((s) => (
-            <div key={s.l} className="min-w-[44px] text-center">
-              <div className="text-[13px] font-semibold text-foreground">{s.v}</div>
-              <div className="text-[10px] text-muted-foreground">{s.l}</div>
-            </div>
-          ))}
-        </div>
-      ) : null}
       <div className="flex flex-shrink-0 gap-1">
         <button
           type="button"
-          onClick={() => {
-            setLiked(!liked);
-            setLocalLikes((n) => (liked ? n - 1 : n + 1));
-          }}
+          onClick={() => setLiked(!liked)}
           className="rounded-sm px-1.5 py-1"
           style={{ color: liked ? HEART_ACTIVE : "var(--muted-foreground)" }}
         >

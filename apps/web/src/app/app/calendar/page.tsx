@@ -1,31 +1,54 @@
 "use client";
 
 import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
+import { mapPrismaStatusToUiStatus } from "@pulse/types/post-status";
 import { PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { PageHeader } from "@/components/app/page-header";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { MOCK_CALENDAR_POSTS, MOCK_POSTS } from "@/lib/mock-data";
+import { trpc } from "@/lib/trpc/trpc";
 import { cn } from "@/lib/utils/cn";
 
 const WEEK_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const DAYS_IN_MONTH = 30;
 const FIRST_DOW = 3; // April 2026 starts on Wednesday
 const TODAY = 28;
+const CURRENT_MONTH = 3; // April = 3 (0-indexed)
+const CURRENT_YEAR = 2026;
 
 export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(29);
+  const postsQuery = trpc.post.list.useQuery({ limit: 100 });
+  const allPosts = postsQuery.data?.posts ?? [];
+
   const cells = Array.from({ length: FIRST_DOW + DAYS_IN_MONTH });
-  const selectedPosts = MOCK_CALENDAR_POSTS[selectedDay] ?? [];
+
+  function getDayPosts(day: number) {
+    return allPosts.filter((p) => {
+      const d = p.scheduledAt ?? p.publishedAt;
+      if (!d) return false;
+      const date = new Date(d);
+      return (
+        date.getDate() === day &&
+        date.getMonth() === CURRENT_MONTH &&
+        date.getFullYear() === CURRENT_YEAR
+      );
+    });
+  }
+
+  const selectedPosts = getDayPosts(selectedDay);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader title="Calendar">
-        <Button size="sm">
-          <Plus size={14} />
-          New post
+        <Button size="sm" asChild>
+          <Link href="/app/composer">
+            <Plus size={14} />
+            New post
+          </Link>
         </Button>
       </PageHeader>
 
@@ -68,7 +91,7 @@ export default function CalendarPage() {
                 // biome-ignore lint/suspicious/noArrayIndexKey: empty calendar cells have no other identity
                 return <div key={`empty-${i}`} className="min-h-20" />;
               }
-              const posts = MOCK_CALENDAR_POSTS[day] ?? [];
+              const posts = getDayPosts(day);
               const isToday = day === TODAY;
               const isSelected = day === selectedDay;
               return (
@@ -79,27 +102,28 @@ export default function CalendarPage() {
                   className={cn(
                     "flex min-h-20 flex-col gap-1 rounded-md border p-2 text-left transition-all",
                     isSelected
-                      ? "border-foreground bg-foreground"
+                      ? "border-primary bg-primary text-primary-foreground"
                       : isToday
-                        ? "border-border bg-secondary"
-                        : "border-border bg-card hover:bg-secondary",
+                        ? "border-primary/40 bg-card"
+                        : "border-border bg-card hover:border-primary/20",
                   )}
                 >
                   <span
                     className={cn(
-                      "text-[12px]",
-                      isToday && "font-bold",
-                      isSelected ? "text-card" : "text-foreground",
+                      "self-start rounded-full text-[12px] font-semibold leading-none",
+                      isSelected ? "text-primary-foreground" : isToday ? "text-primary" : "",
                     )}
                   >
                     {day}
                   </span>
                   <div className="flex flex-col gap-0.5">
                     {posts.map((post, pi) => {
-                      const meta = PLATFORM_CONSTRAINTS[post.platform];
+                      const platform = "twitter";
+                      const meta = PLATFORM_CONSTRAINTS[platform];
+                      const uiStatus = mapPrismaStatusToUiStatus(post.status);
                       return (
                         <div
-                          // biome-ignore lint/suspicious/noArrayIndexKey: same-day same-platform allowed; index disambiguates
+                          // biome-ignore lint/suspicious/noArrayIndexKey: same-day posts use index to disambiguate
                           key={`${day}-${pi}`}
                           className="flex items-center gap-1 overflow-hidden rounded-sm px-1.5 py-0.5"
                           style={{
@@ -116,7 +140,7 @@ export default function CalendarPage() {
                               color: isSelected ? "white" : meta.chipText,
                             }}
                           >
-                            {meta.name}
+                            {uiStatus}
                           </span>
                         </div>
                       );
@@ -135,17 +159,16 @@ export default function CalendarPage() {
             <div className="text-[13px] leading-relaxed text-muted-foreground">
               No posts scheduled.
               <br />
-              <button
-                type="button"
+              <Link
+                href="/app/composer"
                 className="mt-1 font-medium text-foreground underline-offset-4 hover:underline"
               >
                 Add one
-              </button>
+              </Link>
             </div>
           ) : (
             selectedPosts.map((post, i) => {
-              const meta = PLATFORM_CONSTRAINTS[post.platform];
-              const matched = MOCK_POSTS.find((p) => p.platforms.includes(post.platform));
+              const uiStatus = mapPrismaStatusToUiStatus(post.status);
               return (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: detail-panel order is the canonical identity here
@@ -153,19 +176,21 @@ export default function CalendarPage() {
                   className="flex flex-col gap-1.5 rounded-md bg-secondary px-3 py-2.5"
                 >
                   <div className="flex items-center gap-1.5">
-                    <PlatformIcon platform={post.platform} size={16} />
-                    <span className="text-[12px] font-medium">{meta.name}</span>
-                    <StatusBadge status={post.status} />
+                    <PlatformIcon platform="twitter" size={16} />
+                    <StatusBadge status={uiStatus} />
                   </div>
                   <div className="text-[12px] leading-relaxed text-muted-foreground">
-                    {matched?.content?.slice(0, 80) ?? "Post content preview…"}…
+                    {post.content.slice(0, 80)}
+                    {post.content.length > 80 ? "…" : ""}
                   </div>
                 </div>
               );
             })
           )}
-          <Button variant="outline" size="sm" className="mt-auto">
-            <Plus size={13} /> Add to this day
+          <Button variant="outline" size="sm" className="mt-auto" asChild>
+            <Link href="/app/composer">
+              <Plus size={13} /> Add to this day
+            </Link>
           </Button>
         </aside>
       </div>

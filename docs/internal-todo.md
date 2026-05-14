@@ -101,19 +101,19 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 ## Frontend work (built on shadcn defaults; re-skin later when design system lands)
 
 ### Phase J — App shell
-- [ ] Sidebar navigation (Dashboard / Calendar / Composer / Inbox / Analytics / Settings)
+- [~] Sidebar navigation (Dashboard / Calendar / Composer / Inbox / Analytics / Settings)
 - [ ] Top bar with brand switcher dropdown + user menu
 - [ ] Workspace switcher (only relevant if team has multiple workspaces)
 - [ ] Empty states for "no connected accounts" everywhere
 
 ### Phase K — Composer
-- [ ] Composer page layout (left: editor, right: previews)
+- [~] Composer page layout (left: editor, right: previews)
 - [ ] Tiptap editor with platform-aware char counts
 - [ ] Per-platform variant overrides (toggle "different text for Twitter")
 - [ ] Media upload UI (drag-drop + click-to-upload + progress + cancel)
 - [ ] Per-platform preview cards (Instagram, Twitter, LinkedIn, Facebook, Threads, TikTok, YouTube)
 - [ ] Date+time scheduler (react-day-picker + time input + TZ selector)
-- [ ] Save draft / Schedule / Publish-now buttons
+- [~] Save draft / Schedule / Publish-now buttons
 - [ ] Hashtag picker (loads `HashtagSet` rows)
 - [ ] Template loader (loads `PostTemplate` rows)
 - [ ] AI generate button → caption / tone / hashtags
@@ -158,7 +158,7 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [ ] User profile (name, email, avatar, password change)
 - [ ] Workspace settings (name, members list)
 - [ ] Brand settings (name, slug, logo, default hashtags)
-- [ ] Connected accounts list (per platform, status, disconnect, refresh)
+- [x] Connected accounts list (per platform, status, disconnect, refresh)
 - [ ] Team management (invite, role assignment, remove) *if team workflow on*
 - [ ] Notification preferences
 
@@ -268,3 +268,10 @@ in `apps/api`; routing the callback through `apps/web` would add one extra hop a
 duplicate the encryption boundary without any UX benefit. The user-facing
 landing page after success is still `apps/web` — done via `302` to
 `${WEB_ORIGIN}/app/settings/connections?status=…`.
+
+### 2026-05-14 — Mock data removed
+
+All references to `apps/web/src/lib/mock-data.ts` deleted. Pages now read from
+real tRPC procedures or render explicit empty states. Mock fallback in the
+sidebar brand switcher replaced with `trpc.brand.list`. `PostStatus` type
+relocated to `@pulse/types/post-status`.

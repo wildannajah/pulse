@@ -1,4 +1,4 @@
-import type { PostStatus } from "@/lib/mock-data";
+import type { PostStatus } from "@pulse/types/post-status";
 
 type StatusBadgeProps = {
   status: PostStatus;

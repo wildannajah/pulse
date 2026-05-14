@@ -1,6 +1,7 @@
 "use client";
 
 import { PLATFORM_CONSTRAINTS } from "@pulse/types/platform-constraints";
+import type { PostStatus } from "@pulse/types/post-status";
 import { type Platform, PlatformIcon } from "@pulse/ui/icons/platform-icon";
 import {
   Bookmark,
@@ -15,13 +16,23 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { useState } from "react";
-import type { MockPost } from "@/lib/mock-data";
 import { cn } from "@/lib/utils/cn";
 
 import { StatusBadge } from "./status-badge";
 
+type PostDisplayItem = {
+  id: string;
+  content: string;
+  platforms: Platform[];
+  status: PostStatus;
+  scheduledAt?: string | null;
+  likes?: number;
+  comments?: number;
+  reach?: number;
+};
+
 type PostCardProps = {
-  post: MockPost;
+  post: PostDisplayItem;
 };
 
 const HEART_ACTIVE = "oklch(0.52 0.22 275)";
@@ -31,8 +42,8 @@ export function PostCard({ post }: PostCardProps) {
   const [bookmarked, setBookmarked] = useState(false);
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState("");
-  const [localLikes, setLocalLikes] = useState(post.likes);
-  const [activePlatform, setActivePlatform] = useState<Platform>(post.platforms[0]!);
+  const [localLikes, setLocalLikes] = useState(post.likes ?? 0);
+  const [activePlatform, setActivePlatform] = useState<Platform>(post.platforms[0] ?? "twitter");
 
   const meta = PLATFORM_CONSTRAINTS[activePlatform];
 
@@ -72,7 +83,7 @@ export function PostCard({ post }: PostCardProps) {
         </div>
       ) : (
         <div className="flex items-center gap-1.5 px-3 pt-2.5">
-          <PlatformIcon platform={post.platforms[0]!} size={14} />
+          <PlatformIcon platform={post.platforms[0] ?? "twitter"} size={14} />
           <span
             className="rounded-full px-2 py-0.5 font-medium text-[11px]"
             style={{ background: meta.chipBg, color: meta.chipText }}
@@ -88,10 +99,10 @@ export function PostCard({ post }: PostCardProps) {
 
         {/* Meta row */}
         <div className="flex items-center justify-between">
-          {post.date ? (
+          {post.scheduledAt ? (
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
               <Clock size={11} />
-              {post.date} · {post.time}
+              {new Date(post.scheduledAt).toLocaleDateString()}
             </div>
           ) : (
             <div />
@@ -105,9 +116,9 @@ export function PostCard({ post }: PostCardProps) {
         {post.status === "published" ? (
           <div className="flex gap-3 border-y border-border py-2">
             {[
-              { icon: TrendingUp, val: post.reach.toLocaleString(), label: "Reach" },
+              { icon: TrendingUp, val: (post.reach ?? 0).toLocaleString(), label: "Reach" },
               { icon: UserIcon, val: localLikes.toLocaleString(), label: "Likes" },
-              { icon: Hash, val: post.comments.toString(), label: "Comments" },
+              { icon: Hash, val: (post.comments ?? 0).toString(), label: "Comments" },
             ].map((s) => (
               <div key={s.label} className="flex-1 text-center">
                 <div className="text-[13px] font-bold tracking-tight text-foreground">{s.val}</div>
