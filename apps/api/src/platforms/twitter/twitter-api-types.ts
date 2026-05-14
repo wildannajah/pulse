@@ -39,3 +39,13 @@ export type TwitterErrorResponse = {
   title?: string;
   type?: string;
 };
+
+/** Response from POST upload.twitter.com/1.1/media/upload.json (simple upload). */
+export type TwitterMediaUploadResponse = {
+  media_id: number;
+  media_id_string: string;
+  size: number;
+  expires_after_secs: number;
+  image?: { image_type: string; w: number; h: number };
+  video?: { video_type: string };
+};

@@ -60,12 +60,21 @@ export type AdapterCredential = {
 // ────────────────────────────────────────────────────────────────────────────
 
 export type PublishMediaInput = {
-  /** R2 object key — adapter fetches via signed read URL */
+  /** R2 object key — primarily for logging / debugging */
   key: string;
   /** "image" | "video" — adapters branch on this */
   kind: "image" | "video";
-  /** Original filename for content-type / extension hints */
+  /** Original filename — used as multipart filename when uploading to platforms */
   filename?: string;
+  /**
+   * Publicly accessible URL the adapter downloads from before re-uploading
+   * to the target platform. Today this is the R2 CDN URL (PostMedia.url).
+   * Adapter must NOT pass this URL directly to platforms — Twitter/Meta/etc
+   * require binary upload, not URL reference (except IG's container endpoint).
+   */
+  url: string;
+  /** MIME type of the asset — needed for multipart Content-Type headers */
+  mimeType: string;
 };
 
 export type PublishInput = {
