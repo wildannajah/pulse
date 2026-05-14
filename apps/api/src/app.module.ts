@@ -7,6 +7,7 @@ import { EncryptionModule } from "./encryption/encryption.module";
 import { HealthModule } from "./health/health.module";
 import { PlatformsModule } from "./platforms/platforms.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { QueuesModule } from "./queues/queues.module";
 import { StorageModule } from "./storage/storage.module";
 import { TrpcModule } from "./trpc/trpc.module";
 
@@ -21,6 +22,7 @@ import { TrpcModule } from "./trpc/trpc.module";
     EncryptionModule,
     StorageModule,
     PlatformsModule,
+    QueuesModule,
     HealthModule,
     TrpcModule,
   ],

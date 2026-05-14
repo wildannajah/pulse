@@ -10,6 +10,8 @@ import { OAuthStateService } from "../platforms/oauth-state.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { PrismaService } from "../prisma/prisma.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
+import { PostPublishQueueService } from "../queues/post-publish-queue.service";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { R2Service } from "../storage/r2.service";
 import { appRouter } from "./app-router";
 import { createTrpcContext } from "./trpc-context";
@@ -22,6 +24,7 @@ export class TrpcController {
     private readonly oauthState: OAuthStateService,
     private readonly config: ConfigService,
     private readonly encryption: EncryptionService,
+    private readonly postPublishQueue: PostPublishQueueService,
   ) {}
 
   @All("*path")
@@ -62,6 +65,7 @@ export class TrpcController {
           oauthState: this.oauthState,
           config: this.config,
           encryption: this.encryption,
+          postPublishQueue: this.postPublishQueue,
         }),
     });
 
