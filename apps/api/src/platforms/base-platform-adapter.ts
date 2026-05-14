@@ -76,6 +76,18 @@ export type PublishInput = {
   media: PublishMediaInput[];
   /** Optional first-comment hashtag block (IG/FB Phase 3 feature) */
   firstComment?: string;
+  /**
+   * Platform user ID — required by Meta adapters.
+   * - Facebook: FB Page ID
+   * - Instagram: IG Business Account ID
+   * Ignored by adapters that don't need it (Twitter, etc.).
+   */
+  platformUserId?: string;
+  /**
+   * FB Page ID — required by Instagram publishes (which post on behalf of
+   * the linked Page) and Facebook publishes. Same as platformUserId for FB.
+   */
+  platformPageId?: string;
 };
 
 export type PublishOutput = {

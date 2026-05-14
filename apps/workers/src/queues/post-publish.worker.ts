@@ -1,78 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import type { PostPublishJob } from "@pulse/types/event-types";
 import { type Job, Worker } from "bullmq";
-
+import { getAdapter } from "../../../api/src/platforms/adapter-registry";
+import type {
+  AdapterCredential,
+  PublishInput,
+} from "../../../api/src/platforms/base-platform-adapter";
 import { decrypt } from "../encryption";
 import { redis } from "../redis";
 
 const prisma = new PrismaClient();
-
-// ────────────────────────────────────────────────────────────────────────────
-// Minimal Twitter publish — inline for Phase C.
-// Tech debt: extract to packages/platform-adapters in Phase F when other
-// platforms land, so all adapters are shared between apps/api and apps/workers.
-// ────────────────────────────────────────────────────────────────────────────
-
-type TwitterPublishResult =
-  | { ok: true; platformPostId: string; platformPostUrl: string }
-  | {
-      ok: false;
-      kind: "auth_expired" | "rate_limited" | "platform_error" | "network_error";
-      message: string;
-      retryAfterSeconds?: number;
-    };
-
-async function publishTweet(accessToken: string, text: string): Promise<TwitterPublishResult> {
-  let raw: unknown;
-  try {
-    const resp = await fetch("https://api.x.com/2/tweets", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text }),
-    });
-
-    raw = await resp.json().catch(() => null);
-
-    if (resp.status === 401) {
-      return { ok: false, kind: "auth_expired", message: "Twitter token expired or revoked" };
-    }
-
-    if (resp.status === 429) {
-      const retryAfter = resp.headers.get("retry-after");
-      return {
-        ok: false,
-        kind: "rate_limited",
-        message: "Twitter API rate limit exceeded",
-        retryAfterSeconds: retryAfter ? Number(retryAfter) : 60,
-      };
-    }
-
-    if (!resp.ok) {
-      const err = raw as { detail?: string; title?: string } | null;
-      return {
-        ok: false,
-        kind: "platform_error",
-        message: err?.detail ?? err?.title ?? `Twitter returned HTTP ${resp.status}`,
-      };
-    }
-
-    const body = raw as { data: { id: string } };
-    return {
-      ok: true,
-      platformPostId: body.data.id,
-      platformPostUrl: `https://x.com/i/web/status/${body.data.id}`,
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      kind: "network_error",
-      message: err instanceof Error ? err.message : "Unknown network error",
-    };
-  }
-}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Worker
@@ -164,14 +101,41 @@ export const postPublishWorker = new Worker<PostPublishJob>(
       return { ok: false, reason: "decryption_failed" };
     }
 
-    // Step 5 — Dispatch to the platform
-    // For Phase C, only Twitter is supported. Phase F will route via a shared adapter registry.
-    if (platform !== "twitter") {
+    // Step 5 — Dispatch to the platform via the adapter registry
+    let refreshToken: string | null = null;
+    try {
+      if (connectedAccount.refreshToken) {
+        refreshToken = decrypt(connectedAccount.refreshToken);
+      }
+    } catch {
+      // refreshToken is optional — proceed without it
+    }
+
+    const credential: AdapterCredential = {
+      accessToken,
+      refreshToken,
+      expiresAt: connectedAccount.tokenExpiresAt?.toISOString() ?? null,
+      externalAccountId: connectedAccount.platformUserId,
+      scopes: connectedAccount.scopes,
+    };
+
+    const publishInput: PublishInput = {
+      idempotencyKey,
+      text: post.content,
+      media: [],
+      platformUserId: connectedAccount.platformUserId,
+      platformPageId: connectedAccount.platformPageId ?? undefined,
+    };
+
+    let adapter: ReturnType<typeof getAdapter>;
+    try {
+      adapter = getAdapter(platform);
+    } catch {
       await prisma.postPublication.update({
         where: { id: publicationId },
         data: {
           status: "FAILED",
-          errorMessage: `Platform ${platform} not yet supported by workers`,
+          errorMessage: `Platform ${platform} not supported`,
           lastAttemptAt: new Date(),
           attemptCount: { increment: 1 },
         },
@@ -184,12 +148,12 @@ export const postPublishWorker = new Worker<PostPublishJob>(
         platform,
         status: "FAILED",
         durationMs: Date.now() - startMs,
-        errorMessage: `Platform ${platform} not yet supported by workers`,
+        errorMessage: `Platform ${platform} not supported`,
       });
       return { ok: false, reason: "platform_not_supported" };
     }
 
-    const result = await publishTweet(accessToken, post.content);
+    const result = await adapter.publish(credential, publishInput);
     const durationMs = Date.now() - startMs;
 
     // Step 6 — Handle success
@@ -198,8 +162,8 @@ export const postPublishWorker = new Worker<PostPublishJob>(
         where: { id: publicationId },
         data: {
           status: "PUBLISHED",
-          platformPostId: result.platformPostId,
-          platformPostUrl: result.platformPostUrl,
+          platformPostId: result.value.externalPostId,
+          platformPostUrl: result.value.externalUrl,
           publishedAt: new Date(),
           errorMessage: null,
           lastAttemptAt: new Date(),
@@ -214,26 +178,30 @@ export const postPublishWorker = new Worker<PostPublishJob>(
         platform,
         status: "COMPLETED",
         durationMs,
-        result: { platformPostId: result.platformPostId },
+        result: { platformPostId: result.value.externalPostId },
       });
-      console.log(`[post-publish] published ${idempotencyKey} → ${result.platformPostId}`);
-      return { ok: true, platformPostId: result.platformPostId };
+      console.log(`[post-publish] published ${idempotencyKey} → ${result.value.externalPostId}`);
+      return { ok: true, platformPostId: result.value.externalPostId };
     }
 
     // Step 7 — Handle failures
 
-    if (result.kind === "auth_expired") {
+    if (result.error.kind === "auth_expired") {
       // Mark account expired; do NOT retry — user must reconnect
       await Promise.all([
         prisma.connectedAccount.update({
           where: { id: connectedAccount.id },
-          data: { status: "EXPIRED", lastErrorAt: new Date(), lastErrorMessage: result.message },
+          data: {
+            status: "EXPIRED",
+            lastErrorAt: new Date(),
+            lastErrorMessage: result.error.message,
+          },
         }),
         prisma.postPublication.update({
           where: { id: publicationId },
           data: {
             status: "FAILED",
-            errorMessage: result.message,
+            errorMessage: result.error.message,
             lastAttemptAt: new Date(),
             attemptCount: { increment: 1 },
           },
@@ -247,16 +215,16 @@ export const postPublishWorker = new Worker<PostPublishJob>(
         platform,
         status: "FAILED",
         durationMs,
-        errorMessage: result.message,
+        errorMessage: result.error.message,
       });
       console.warn(`[post-publish] auth expired for account=${connectedAccount.id}`);
       return { ok: false, reason: "auth_expired" };
     }
 
-    if (result.kind === "rate_limited") {
+    if (result.error.kind === "rate_limited") {
       // Throw so BullMQ retries with backoff
       console.warn(`[post-publish] rate limited — will retry`);
-      throw new Error(`Twitter rate limited: ${result.message}`);
+      throw new Error(`${platform} rate limited: ${result.error.message}`);
     }
 
     // Other permanent failures
@@ -264,7 +232,7 @@ export const postPublishWorker = new Worker<PostPublishJob>(
       where: { id: publicationId },
       data: {
         status: "FAILED",
-        errorMessage: result.message,
+        errorMessage: result.error.message,
         lastAttemptAt: new Date(),
         attemptCount: { increment: 1 },
       },
@@ -277,10 +245,12 @@ export const postPublishWorker = new Worker<PostPublishJob>(
       platform,
       status: "FAILED",
       durationMs,
-      errorMessage: result.message,
+      errorMessage: result.error.message,
     });
-    console.error(`[post-publish] permanent failure for ${idempotencyKey}: ${result.message}`);
-    return { ok: false, reason: result.kind };
+    console.error(
+      `[post-publish] permanent failure for ${idempotencyKey}: ${result.error.message}`,
+    );
+    return { ok: false, reason: result.error.kind };
   },
   { connection: redis },
 );

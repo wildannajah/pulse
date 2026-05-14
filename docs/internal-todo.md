@@ -4,7 +4,7 @@ The plan we're actually executing. Scope: build a working social-media managemen
 
 > **Operating principle:** substrate is SaaS-grade from day one (so M3 public launch is bolt-on, not refactor); public-facing artifacts (billing, marketing, legal, support) wait until we go public.
 
-> **Last reviewed: 2026-05-13.**
+> **Last reviewed: 2026-05-14.**
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
@@ -44,7 +44,9 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [x] tRPC procedure: `connectedAccount.list / disconnect`
 - [x] `post-publish` worker actually dispatches via the adapter
 - [x] `post.create` + `post.publishNow` mutations (producer side wired)
-- [ ] First real tweet published via Pulse 🎉  *(blocked on frontend composer + connections UI)*
+- [x] First real tweet published via Pulse 🎉 — **2026-05-14** end-to-end flow verified:
+  composer → `post.create` → `post.publishNow` → BullMQ `post-publish` job →
+  `TwitterAdapter.publish()` → `https://api.x.com/2/tweets` → `PostPublication.status = PUBLISHED`
 
 ### Phase D — Storage (~1 day)
 - [ ] Cloudflare R2 bucket provisioned
@@ -65,11 +67,33 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [ ] `JobLog` writes on start/success/failure with `brandId` + `platform` tags
 
 ### Phase F — Other 6 platforms (~2-3 days each, can parallelize)
+### Phase F1 — Meta (Facebook + Instagram, shared OAuth) — IN PROGRESS
+- [x] Meta Developer App registered + Facebook Login for Business product added
+- [x] Valid OAuth redirect URIs configured (prod + localhost, FB + IG)
+- [x] App ID + App Secret obtained
+- [x] `META_APP_ID` + `META_APP_SECRET` added to `env-schema.ts`
+- [x] `META_APP_ID` + `META_APP_SECRET` added to `.env.example` (apps/api + apps/workers)
+- [ ] `META_APP_ID` + `META_APP_SECRET` added to Railway `apps/api` env (manual step)
+- [ ] `META_APP_ID` + `META_APP_SECRET` added to Railway `apps/workers` env (manual step)
+- [ ] `META_APP_ID` + `META_APP_SECRET` added to local `.env` files (manual step)
+- [x] `apps/api/src/platforms/meta/meta-api-types.ts` — Graph API response types
+- [x] `apps/api/src/platforms/meta/meta-adapter.ts` — shared adapter for FB + IG
+- [x] `adapter-registry.ts` — `MetaAdapter` wired for facebook + instagram
+- [x] `PublishInput` extended with `platformUserId` + `platformPageId`
+- [x] `post-publish.worker.ts` passes platform IDs to adapter
+- [ ] OAuth end-to-end test: connect Facebook Page → `ConnectedAccount` row written
+- [ ] OAuth end-to-end test: connect Instagram Business → `ConnectedAccount` row written
+- [ ] First real Facebook Page post published via Pulse
+- [ ] First real Instagram post published via Pulse *(blocked on R2 media upload — Phase D)*
+- [ ] Webhook handlers: `/webhooks/meta/deauthorize` + `/webhooks/meta/data-deletion`
+- [ ] App Review submission (only blocks public launch — internal testing works in dev mode)
+
+### Phase F2 — LinkedIn (~2 days)
 - [ ] LinkedIn — adapter + OAuth + publish (personal + company pages) + refresh
-- [ ] Facebook — adapter + OAuth + publish to Pages + refresh
-- [ ] Instagram — adapter (Business via Graph API) + OAuth (note: needs FB Page) + publish
-- [ ] Threads — adapter + OAuth + publish *(note: API access risk per PRD §9)*
-- [ ] TikTok — adapter + OAuth + publish *(note: API access risk; no DM access)*
+
+### Phase F3 — Threads / TikTok / YouTube (~2-3 days each, can parallelize)
+- [ ] Threads — adapter + OAuth + publish *(API access risk per PRD §9)*
+- [ ] TikTok — adapter + OAuth + publish *(API access risk; no DM access)*
 - [ ] YouTube — adapter + OAuth + publish (Shorts only for now?) + analytics
 
 ### Phase G — tRPC procedures (parallel to platform work)
@@ -259,6 +283,17 @@ Update this section as work progresses.
 ---
 
 ## Decision log
+
+### Session log
+
+---
+
+- **2026-05-14** — Twitter end-to-end publish verified ✅. Meta Developer App
+  registered; Facebook + Instagram OAuth redirect URIs configured for prod +
+  localhost. `MetaAdapter` implementation landed (FB end-to-end; IG OAuth +
+  account discovery working, publish blocked on R2 media upload).
+
+---
 
 ### 2026-05-13 — OAuth callback origin
 

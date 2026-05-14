@@ -7,6 +7,7 @@ import type {
   ExchangeAuthCodeInput,
   ExchangeAuthCodeOutput,
 } from "./base-platform-adapter";
+import { MetaAdapter } from "./meta/meta-adapter";
 import { TwitterAdapter } from "./twitter/twitter-adapter";
 
 /**
@@ -58,13 +59,18 @@ class NotImplementedAdapter implements BasePlatformAdapter {
 let adapters: Record<Platform, BasePlatformAdapter> | null = null;
 
 function buildAdapters(): Record<Platform, BasePlatformAdapter> {
+  const metaConfig = {
+    appId: process.env.META_APP_ID ?? "",
+    appSecret: process.env.META_APP_SECRET ?? "",
+  };
+
   return {
-    instagram: new NotImplementedAdapter("instagram"),
+    instagram: new MetaAdapter({ platform: "instagram", ...metaConfig }),
     twitter: new TwitterAdapter({
       clientId: process.env.TWITTER_CLIENT_ID ?? "",
       clientSecret: process.env.TWITTER_CLIENT_SECRET ?? "",
     }),
-    facebook: new NotImplementedAdapter("facebook"),
+    facebook: new MetaAdapter({ platform: "facebook", ...metaConfig }),
     linkedin: new NotImplementedAdapter("linkedin"),
     threads: new NotImplementedAdapter("threads"),
     tiktok: new NotImplementedAdapter("tiktok"),
