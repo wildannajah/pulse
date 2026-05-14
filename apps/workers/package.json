@@ -9,9 +9,13 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit"
   },
+  "prisma": {
+    "schema": "../api/prisma/schema.prisma"
+  },
   "dependencies": {
     "@bull-board/api": "^7.0.0",
     "@bull-board/express": "^7.0.0",
+    "@prisma/client": "^6.19.3",
     "@pulse/types": "workspace:*",
     "bullmq": "^5.76.2",
     "dotenv": "^17.4.2",
@@ -24,6 +28,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.39",
     "esbuild": "^0.28.0",
+    "prisma": "^6.19.3",
     "tsx": "^4.21.0",
     "typescript": "5.9.3"
   }
