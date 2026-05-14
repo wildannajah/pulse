@@ -48,13 +48,24 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
   composer → `post.create` → `post.publishNow` → BullMQ `post-publish` job →
   `TwitterAdapter.publish()` → `https://api.x.com/2/tweets` → `PostPublication.status = PUBLISHED`
 
-### Phase D — Storage (~1 day)
-- [ ] Cloudflare R2 bucket provisioned
-- [ ] Signed-URL upload flow (server issues upload URL, client never sees R2 credentials)
-- [ ] Path structure: `{workspaceId}/{brandId}/{kind}/{id}.{ext}` — tenant isolation as defense in depth
-- [ ] `apps/api/src/storage/r2.service.ts` — issuer + delete helpers
-- [ ] tRPC procedure: `media.requestUpload({ kind, brandId })` returns signed URL + final asset key
-- [ ] PostMedia row writes after upload completes (client confirms via separate procedure)
+### Phase D — Storage (~1 day) — BACKEND COMPLETE
+- [x] Cloudflare R2 bucket provisioned
+- [x] Signed-URL upload flow (server issues upload URL, client never sees R2 credentials)
+- [x] Path structure: `{workspaceId}/{brandId}/{kind}/{id}.{ext}` — tenant isolation enforced
+- [x] `apps/api/src/storage/r2.service.ts` — `presignPut` / `presignGet` / `deleteObject` / `publicUrl`
+- [x] `apps/api/scripts/test-r2.ts` — connectivity smoke test (presign → upload → public GET → delete)
+- [x] tRPC procedure: `media.requestUpload({ kind, contentType, filename })` returns signed URL + asset key
+- [x] tRPC procedure: `media.confirmUpload({ assetKey, ... })` writes the PostMedia row with brand-prefix check
+- [x] MIME allowlist enforced (image/jpeg, png, gif, webp, video/mp4, quicktime, webm, application/pdf)
+- [x] `post.create` accepts `mediaKeys` and attaches PostMedia rows transactionally (**2026-05-14**)
+
+#### Downstream of Phase D (tracked separately, but blocked Phase D's "useful end-to-end" milestone)
+- [ ] Composer media upload UI — drag-drop, file picker, progress, cancel, previews, remove (Phase K)
+- [ ] Per-platform media-count validation by type (image vs video) — v1 treats all uploads as images
+- [ ] TwitterAdapter media upload — `https://upload.twitter.com/1.1/media/upload.json` → attach `media_ids`
+- [ ] InstagramAdapter publish (unblocks IG entirely — IG requires media) — see Phase F1
+- [ ] FacebookAdapter image posts via `/{page-id}/photos`
+- [ ] Optional: private-read signed-URL flow if any media should NOT be publicly accessible
 
 ### Phase E — Workers deployment + remaining queues (~2 days)
 - [x] `apps/workers` Dockerfile (mirror `apps/api`'s pattern)
@@ -274,7 +285,7 @@ Update this section as work progresses.
 > The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
 > measure of total project progress.
 
-- **Backend phases:** A 2/2 · B 7/7 · C 8/9 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **16 of ~53 done**
+- **Backend phases:** A 2/2 · B 7/7 · C 8/9 · D 9/9 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **25 of ~57 done**
 - **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
 - **SaaS-readiness:** 10 of 21 done (the schema/architecture half)
 
@@ -292,6 +303,12 @@ Update this section as work progresses.
   registered; Facebook + Instagram OAuth redirect URIs configured for prod +
   localhost. `MetaAdapter` implementation landed (FB end-to-end; IG OAuth +
   account discovery working, publish blocked on R2 media upload).
+
+- **2026-05-14** — Audit of Phase D revealed backend is 100% shipped; tracker
+  was stale. Corrected status here. Wired `post.create` to actually attach
+  PostMedia by `mediaKeys` (was previously a `console.warn` no-op). Phase D
+  backend now CLOSED; remaining work is consumer-side (composer UI, per-platform
+  adapter media support).
 
 ---
 

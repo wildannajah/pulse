@@ -55,13 +55,6 @@ export const postRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.mediaKeys.length > 0) {
-        console.warn(
-          "[post.create] mediaKeys ignored — R2 media upload lands in Phase D",
-          input.mediaKeys,
-        );
-      }
-
       if (input.scheduledAt && input.scheduledAt <= new Date()) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "scheduledAt must be in the future" });
       }
@@ -75,6 +68,53 @@ export const postRouter = router({
             message: `${constraint.name} content exceeds ${constraint.charLimit} characters`,
           });
         }
+      }
+
+      // Resolve and validate media keys (outside transaction — cheap read + early failure)
+      let mediaRowsToAttach: { id: string; storageKey: string }[] = [];
+
+      if (input.mediaKeys.length > 0) {
+        // TODO(v2): differentiate image vs video count when we wire per-type media UI
+        for (const platform of input.platforms) {
+          const maxImages = PLATFORM_CONSTRAINTS[platform].media.maxImages;
+          if (maxImages !== null && input.mediaKeys.length > maxImages) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `${PLATFORM_CONSTRAINTS[platform].name} allows at most ${maxImages} media items per post`,
+            });
+          }
+        }
+
+        const found = await ctx.prisma.postMedia.findMany({
+          where: {
+            storageKey: { in: input.mediaKeys },
+            brandId: ctx.brand.id,
+          },
+          select: { id: true, storageKey: true, postId: true },
+        });
+
+        // All keys must resolve to a row belonging to this brand
+        const foundKeys = new Set(found.map((m) => m.storageKey));
+        const missing = input.mediaKeys.filter((k) => !foundKeys.has(k));
+        if (missing.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Media keys not found or not owned by this brand: ${missing.join(", ")}`,
+          });
+        }
+
+        // None of them should already be attached to a post
+        const alreadyAttached = found.filter((m) => m.postId !== null);
+        if (alreadyAttached.length > 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Media already attached to another post: ${alreadyAttached
+              .map((m) => m.storageKey)
+              .join(", ")}`,
+          });
+        }
+
+        mediaRowsToAttach = found.map((m) => ({ id: m.id, storageKey: m.storageKey }));
       }
 
       // Resolve connected accounts for all requested platforms
@@ -111,6 +151,20 @@ export const postRouter = router({
             timezone: "UTC",
           },
         });
+
+        if (mediaRowsToAttach.length > 0) {
+          await Promise.all(
+            mediaRowsToAttach.map((row) =>
+              tx.postMedia.update({
+                where: { id: row.id },
+                data: {
+                  postId: created.id,
+                  position: input.mediaKeys.indexOf(row.storageKey),
+                },
+              }),
+            ),
+          );
+        }
 
         const publications = await Promise.all(
           connectedAccounts.map((account) =>
