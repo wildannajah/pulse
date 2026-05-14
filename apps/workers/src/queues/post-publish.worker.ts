@@ -185,6 +185,7 @@ export const postPublishWorker = new Worker<PostPublishJob>(
           attemptCount: { increment: 1 },
         },
       });
+      const mediaCount = publishInput.media.length;
       await writeJobLog({
         jobId: job.id ?? "unknown",
         brandId,
@@ -193,10 +194,19 @@ export const postPublishWorker = new Worker<PostPublishJob>(
         platform,
         status: "COMPLETED",
         durationMs,
-        result: { platformPostId: result.value.externalPostId },
+        result: {
+          platformPostId: result.value.externalPostId,
+          hasMedia: String(mediaCount > 0),
+          mediaCount: String(mediaCount),
+        },
       });
       console.log(`[post-publish] published ${idempotencyKey} → ${result.value.externalPostId}`);
-      return { ok: true, platformPostId: result.value.externalPostId };
+      return {
+        ok: true,
+        platformPostId: result.value.externalPostId,
+        hasMedia: mediaCount > 0,
+        mediaCount,
+      };
     }
 
     // Step 7 — Handle failures
