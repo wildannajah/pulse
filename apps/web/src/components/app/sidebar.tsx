@@ -63,9 +63,10 @@ export function Sidebar({ user }: SidebarProps) {
 
   useEffect(() => {
     const brands = brandsQuery.data;
-    if (!brands?.length) return;
+    const first = brands?.[0];
+    if (!first) return;
     const isValid = brands.some((b) => b.id === activeBrandId);
-    if (!isValid) setActiveBrandId(brands[0].id);
+    if (!isValid) setActiveBrandId(first.id);
   }, [activeBrandId, setActiveBrandId, brandsQuery.data]);
 
   const activeBrand =
