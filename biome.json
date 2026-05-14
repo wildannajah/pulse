@@ -127,7 +127,8 @@
       "linter": {
         "rules": {
           "style": {
-            "useFilenamingConvention": "off"
+            "useFilenamingConvention": "off",
+            "useImportType": "off"
           }
         }
       }
