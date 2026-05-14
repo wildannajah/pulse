@@ -7,13 +7,16 @@ import type {
   ExchangeAuthCodeInput,
   ExchangeAuthCodeOutput,
 } from "./base-platform-adapter";
+import { TwitterAdapter } from "./twitter/twitter-adapter";
 
 /**
  * Adapter registry — maps Platform → concrete adapter instance.
  *
- * Phase 0: every platform throws "not implemented" so the type contract is
- * exercised by callers (workers, procedures) without committing to any
- * platform's API client. Concrete adapters land per platform in 1B.
+ * Adapters are built lazily on first call so env vars are always available by
+ * then (validated by Zod schema at NestJS startup; validated manually in workers).
+ * Each adapter reads its own credentials from process.env via the config object
+ * passed at construction — no NestJS DI needed, so this module can be imported
+ * from both apps/api and apps/workers.
  */
 
 class NotImplementedAdapter implements BasePlatformAdapter {
@@ -52,18 +55,26 @@ class NotImplementedAdapter implements BasePlatformAdapter {
   }
 }
 
-const ADAPTERS: Record<Platform, BasePlatformAdapter> = {
-  instagram: new NotImplementedAdapter("instagram"),
-  twitter: new NotImplementedAdapter("twitter"),
-  facebook: new NotImplementedAdapter("facebook"),
-  linkedin: new NotImplementedAdapter("linkedin"),
-  threads: new NotImplementedAdapter("threads"),
-  tiktok: new NotImplementedAdapter("tiktok"),
-  youtube: new NotImplementedAdapter("youtube"),
-};
+let adapters: Record<Platform, BasePlatformAdapter> | null = null;
+
+function buildAdapters(): Record<Platform, BasePlatformAdapter> {
+  return {
+    instagram: new NotImplementedAdapter("instagram"),
+    twitter: new TwitterAdapter({
+      clientId: process.env.TWITTER_CLIENT_ID ?? "",
+      clientSecret: process.env.TWITTER_CLIENT_SECRET ?? "",
+    }),
+    facebook: new NotImplementedAdapter("facebook"),
+    linkedin: new NotImplementedAdapter("linkedin"),
+    threads: new NotImplementedAdapter("threads"),
+    tiktok: new NotImplementedAdapter("tiktok"),
+    youtube: new NotImplementedAdapter("youtube"),
+  };
+}
 
 export function getAdapter(platform: Platform): BasePlatformAdapter {
-  const adapter = ADAPTERS[platform];
+  if (!adapters) adapters = buildAdapters();
+  const adapter = adapters[platform];
   if (!adapter) throw new Error(`No adapter registered for platform: ${platform}`);
   return adapter;
 }

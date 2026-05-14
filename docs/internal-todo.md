@@ -37,12 +37,12 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
 ### Phase C — Twitter/X end-to-end (~3 days, pilot platform)
 - [ ] Register Twitter dev app (manual step) — get client ID + secret into env
-- [ ] `TwitterAdapter implements BasePlatformAdapter`
-- [ ] OAuth 2.0 + PKCE callback handler
-- [ ] Encrypted token write to `ConnectedAccount` (encryption service ready)
-- [ ] tRPC procedure: `connectedAccount.startOAuth(platform)` returns auth URL
-- [ ] tRPC procedure: `connectedAccount.list / disconnect`
-- [ ] `post-publish` worker actually dispatches via the adapter
+- [x] `TwitterAdapter implements BasePlatformAdapter`
+- [x] OAuth 2.0 + PKCE callback handler
+- [x] Encrypted token write to `ConnectedAccount` (encryption service ready)
+- [x] tRPC procedure: `connectedAccount.startOAuth(platform)` returns auth URL
+- [x] tRPC procedure: `connectedAccount.list / disconnect`
+- [x] `post-publish` worker actually dispatches via the adapter
 - [ ] First real tweet published via Pulse 🎉
 
 ### Phase D — Storage (~1 day)
@@ -249,7 +249,7 @@ Update this section as work progresses.
 > The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
 > measure of total project progress.
 
-- **Backend phases:** A 2/2 · B 7/7 · C 0/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **9 of ~52 done**
+- **Backend phases:** A 2/2 · B 7/7 · C 6/8 · D 0/5 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **15 of ~52 done**
 - **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
 - **SaaS-readiness:** 10 of 21 done (the schema/architecture half)
 
