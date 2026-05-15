@@ -5,8 +5,8 @@ import { TwitterAdapter } from "./twitter-adapter";
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const adapter = new TwitterAdapter({
-  clientId: "test-client-id",
-  clientSecret: "test-client-secret",
+  consumerKey: "test-consumer-key",
+  consumerSecret: "test-consumer-secret",
 });
 
 const credential: AdapterCredential = {

@@ -195,9 +195,11 @@ export type BuildAuthorizationUrlInput = {
   redirectUri: string;
   /**
    * PKCE code verifier — adapter hashes to code_challenge.
-   * Pass for PKCE platforms (Twitter/X); ignored by adapters that don't use PKCE.
+   * Pass for PKCE platforms; ignored by adapters that don't use PKCE.
    */
   codeVerifier?: string;
+  /** OAuth 1.0a request token obtained from fetchRequestToken. Only used by Twitter. */
+  oauth1RequestToken?: string;
 };
 
 export type ExchangeAuthCodeInput = {
@@ -222,7 +224,7 @@ export interface BasePlatformAdapter {
   readonly platform: Platform;
 
   /**
-   * Build the platform's OAuth 2.0 authorization URL.
+   * Build the platform's OAuth authorization URL.
    * Pulse-level credentials (client_id, scopes) come from env on the adapter
    * side. Caller passes the opaque state token and the absolute redirect_uri.
    * Synchronous — no network call needed to construct the URL.
@@ -231,11 +233,31 @@ export interface BasePlatformAdapter {
 
   /**
    * Exchange the platform's authorization `code` for tokens + profile.
-   * Called by the OAuth callback handler. Returns plaintext credentials + the
-   * bare profile fields needed to populate `ConnectedAccount`. The caller
-   * encrypts and persists.
+   * Called by the OAuth callback handler for OAuth 2.0 platforms. Returns
+   * plaintext credentials + the bare profile fields needed to populate
+   * `ConnectedAccount`. The caller encrypts and persists.
    */
   exchangeAuthCode(input: ExchangeAuthCodeInput): Promise<AdapterResult<ExchangeAuthCodeOutput>>;
+
+  /**
+   * OAuth 1.0a only — fetch a request token before redirecting the user.
+   * Returns the request token and secret; the caller stores the secret in
+   * Redis keyed by the request token for the callback to retrieve.
+   */
+  fetchRequestToken?(
+    callbackUrl: string,
+  ): Promise<AdapterResult<{ requestToken: string; requestTokenSecret: string }>>;
+
+  /**
+   * OAuth 1.0a only — exchange the verifier for a permanent access token.
+   * Called by the OAuth callback handler when `oauth_token` + `oauth_verifier`
+   * are present. The caller retrieves the stored requestTokenSecret from Redis.
+   */
+  exchangeOAuth1Verifier?(
+    requestToken: string,
+    requestTokenSecret: string,
+    verifier: string,
+  ): Promise<AdapterResult<ExchangeAuthCodeOutput>>;
 
   /** Publish a post; the worker calls this and persists the output. */
   publish(

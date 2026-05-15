@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 
 import type { Platform } from "@pulse/types/platform";
 
@@ -22,170 +22,327 @@ import type {
 import type {
   TwitterErrorResponse,
   TwitterMediaUploadResponse,
-  TwitterTokenResponse,
   TwitterTweetResponse,
   TwitterUserResponse,
 } from "./twitter-api-types";
 
-const TOKEN_URL = "https://api.x.com/2/oauth2/token";
+const REQUEST_TOKEN_URL = "https://api.twitter.com/oauth/request_token";
+const AUTHORIZE_URL = "https://api.twitter.com/oauth/authorize";
+const ACCESS_TOKEN_URL = "https://api.twitter.com/oauth/access_token";
+const REVOKE_URL = "https://api.twitter.com/1.1/oauth/invalidate_token";
 const MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json";
-const REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
-const USER_ME_URL = "https://api.x.com/2/users/me?user.fields=profile_image_url,url,name,username";
 const TWEETS_URL = "https://api.x.com/2/tweets";
-const AUTH_URL = "https://twitter.com/i/oauth2/authorize";
-const SCOPES = "tweet.read tweet.write users.read offline.access";
+const USER_ME_URL = "https://api.x.com/2/users/me?user.fields=profile_image_url,url,name,username";
+
+// Scopes granted at the app level — OAuth 1.0a doesn't use per-token scopes
+const OAUTH1_SCOPES = ["read", "write", "dm"] as const;
 
 type TwitterAdapterConfig = {
-  clientId: string;
-  clientSecret: string;
+  consumerKey: string;
+  consumerSecret: string;
 };
 
 export class TwitterAdapter implements BasePlatformAdapter {
   readonly platform: Platform = "twitter";
 
-  private readonly clientId: string;
-  private readonly clientSecret: string;
+  private readonly consumerKey: string;
+  private readonly consumerSecret: string;
 
   constructor(config: TwitterAdapterConfig) {
-    if (!config.clientId) throw new Error("TwitterAdapter: TWITTER_CLIENT_ID is required");
-    if (!config.clientSecret) throw new Error("TwitterAdapter: TWITTER_CLIENT_SECRET is required");
-    this.clientId = config.clientId;
-    this.clientSecret = config.clientSecret;
+    if (!config.consumerKey) throw new Error("TwitterAdapter: TWITTER_CONSUMER_KEY is required");
+    if (!config.consumerSecret)
+      throw new Error("TwitterAdapter: TWITTER_CONSUMER_SECRET is required");
+    this.consumerKey = config.consumerKey;
+    this.consumerSecret = config.consumerSecret;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // OAuth lifecycle
+  // OAuth 1.0a lifecycle
   // ────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Build the Twitter OAuth 1.0a authorization URL.
+   * Requires a request token obtained via fetchRequestToken first.
+   */
   buildAuthorizationUrl(input: BuildAuthorizationUrlInput): AdapterResult<{ url: string }> {
-    const { state, redirectUri, codeVerifier } = input;
+    const { oauth1RequestToken } = input;
 
-    if (!codeVerifier) {
+    if (!oauth1RequestToken) {
       return {
         ok: false,
         error: {
           kind: "validation_failed",
-          message: "Twitter OAuth requires a PKCE code verifier",
+          message: "Twitter OAuth 1.0a requires a request token — call fetchRequestToken first",
         },
       };
     }
 
-    const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-
-    const params = new URLSearchParams({
-      response_type: "code",
-      client_id: this.clientId,
-      redirect_uri: redirectUri,
-      scope: SCOPES,
-      state,
-      code_challenge: codeChallenge,
-      code_challenge_method: "S256",
-    });
-
-    return { ok: true, value: { url: `${AUTH_URL}?${params.toString()}` } };
-  }
-
-  async exchangeAuthCode(
-    input: ExchangeAuthCodeInput,
-  ): Promise<AdapterResult<ExchangeAuthCodeOutput>> {
-    const { code, redirectUri, codeVerifier } = input;
-
-    const body = new URLSearchParams({
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: redirectUri,
-      client_id: this.clientId,
-      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
-    });
-
-    const tokenResult = await this.postForm<TwitterTokenResponse>(TOKEN_URL, body);
-    if (!tokenResult.ok) return tokenResult;
-
-    const tokens = tokenResult.value;
-
-    const profileResult = await this.getUser(tokens.access_token);
-    if (!profileResult.ok) return profileResult;
-
-    const user = profileResult.value;
-    const scopes = tokens.scope.split(" ");
-
-    const expiresAt = tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-      : null;
-
     return {
       ok: true,
-      value: {
-        credential: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? null,
-          expiresAt,
-          externalAccountId: user.id,
-          scopes,
-        },
-        profile: {
-          platformUserId: user.id,
-          platformUsername: user.username,
-          displayName: user.name,
-          avatarUrl: user.profile_image_url,
-          profileUrl: `https://x.com/${user.username}`,
-          platformPageId: undefined,
-        },
-      },
+      value: { url: `${AUTHORIZE_URL}?oauth_token=${oauth1RequestToken}` },
     };
   }
 
-  async refreshToken(credential: AdapterCredential): Promise<AdapterResult<AdapterCredential>> {
-    if (!credential.refreshToken) {
+  /**
+   * Fetch a temporary request token from Twitter.
+   * Step 1 of the OAuth 1.0a three-legged flow.
+   */
+  async fetchRequestToken(
+    callbackUrl: string,
+  ): Promise<AdapterResult<{ requestToken: string; requestTokenSecret: string }>> {
+    const authHeader = this.signRequest({
+      method: "POST",
+      url: REQUEST_TOKEN_URL,
+      oauthCallback: callbackUrl,
+    });
+
+    let raw: string;
+    try {
+      const resp = await fetch(REQUEST_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+
+      raw = await resp.text().catch(() => "");
+
+      if (resp.status === 401) {
+        return {
+          ok: false,
+          error: {
+            kind: "auth_expired",
+            message: "Twitter rejected request token fetch — check consumer credentials",
+            raw,
+          },
+        };
+      }
+
+      if (!resp.ok) {
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: `Twitter request token returned HTTP ${resp.status}`,
+            raw,
+          },
+        };
+      }
+
+      const params = new URLSearchParams(raw);
+      const oauthToken = params.get("oauth_token");
+      const oauthTokenSecret = params.get("oauth_token_secret");
+
+      if (!oauthToken || !oauthTokenSecret) {
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: "Twitter request token response missing oauth_token or oauth_token_secret",
+            raw,
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        value: { requestToken: oauthToken, requestTokenSecret: oauthTokenSecret },
+      };
+    } catch (err) {
       return {
         ok: false,
         error: {
-          kind: "auth_expired",
-          message: "No refresh token available; user must reconnect",
+          kind: "network_error",
+          message: err instanceof Error ? err.message : "Unknown network error",
+          raw: err,
         },
       };
     }
+  }
 
-    const body = new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: credential.refreshToken,
-      client_id: this.clientId,
+  /**
+   * Exchange the OAuth 1.0a verifier for a permanent access token.
+   * Step 3 of the three-legged flow (step 2 is the user redirect).
+   */
+  async exchangeOAuth1Verifier(
+    requestToken: string,
+    requestTokenSecret: string,
+    verifier: string,
+  ): Promise<AdapterResult<ExchangeAuthCodeOutput>> {
+    const authHeader = this.signRequest({
+      method: "POST",
+      url: ACCESS_TOKEN_URL,
+      oauthToken: requestToken,
+      oauthVerifier: verifier,
+      tokenSecret: requestTokenSecret,
     });
 
-    const tokenResult = await this.postForm<TwitterTokenResponse>(TOKEN_URL, body);
-    if (!tokenResult.ok) return tokenResult;
+    let raw: string;
+    try {
+      const resp = await fetch(ACCESS_TOKEN_URL, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
 
-    const tokens = tokenResult.value;
-    const scopes = tokens.scope.split(" ");
-    const expiresAt = tokens.expires_in
-      ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-      : null;
+      raw = await resp.text().catch(() => "");
 
+      if (resp.status === 401) {
+        return {
+          ok: false,
+          error: {
+            kind: "auth_expired",
+            message:
+              "Twitter rejected access token exchange — invalid verifier or expired request token",
+            raw,
+          },
+        };
+      }
+
+      if (!resp.ok) {
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: `Twitter access token exchange returned HTTP ${resp.status}`,
+            raw,
+          },
+        };
+      }
+
+      const params = new URLSearchParams(raw);
+      const accessToken = params.get("oauth_token");
+      const accessTokenSecret = params.get("oauth_token_secret");
+      const userId = params.get("user_id");
+      const screenName = params.get("screen_name");
+
+      if (!accessToken || !accessTokenSecret || !userId || !screenName) {
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message: "Twitter access token response missing required fields",
+            raw,
+          },
+        };
+      }
+
+      const profileResult = await this.getUser(accessToken, accessTokenSecret);
+      if (!profileResult.ok) return profileResult;
+
+      const user = profileResult.value;
+
+      return {
+        ok: true,
+        value: {
+          credential: {
+            accessToken,
+            refreshToken: accessTokenSecret, // stored as refreshToken; no real refresh for OAuth 1.0a
+            expiresAt: null, // OAuth 1.0a tokens are permanent
+            externalAccountId: userId,
+            scopes: [...OAUTH1_SCOPES],
+          },
+          profile: {
+            platformUserId: userId,
+            platformUsername: screenName,
+            displayName: user.name,
+            avatarUrl: user.profile_image_url,
+            profileUrl: `https://x.com/${screenName}`,
+            platformPageId: undefined,
+          },
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "network_error",
+          message: err instanceof Error ? err.message : "Unknown network error",
+          raw: err,
+        },
+      };
+    }
+  }
+
+  /**
+   * Not used for Twitter OAuth 1.0a — exchangeOAuth1Verifier handles the flow.
+   */
+  async exchangeAuthCode(
+    _input: ExchangeAuthCodeInput,
+  ): Promise<AdapterResult<ExchangeAuthCodeOutput>> {
     return {
-      ok: true,
-      value: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? credential.refreshToken,
-        expiresAt,
-        externalAccountId: credential.externalAccountId,
-        scopes,
+      ok: false,
+      error: {
+        kind: "platform_error",
+        message: "Twitter uses OAuth 1.0a — use exchangeOAuth1Verifier instead",
       },
     };
   }
 
+  /** OAuth 1.0a tokens are permanent — return the credential unchanged. */
+  async refreshToken(credential: AdapterCredential): Promise<AdapterResult<AdapterCredential>> {
+    return { ok: true, value: credential };
+  }
+
   async revokeToken(credential: AdapterCredential): Promise<AdapterResult<void>> {
-    const body = new URLSearchParams({
-      token: credential.accessToken,
-      token_type_hint: "access_token",
+    const formParams = { access_token: credential.accessToken };
+    const authHeader = this.signRequest({
+      method: "POST",
+      url: REVOKE_URL,
+      formParams,
+      oauthToken: credential.accessToken,
+      tokenSecret: credential.refreshToken ?? "",
     });
 
-    const result = await this.postForm<unknown>(REVOKE_URL, body);
-    if (!result.ok) return result;
-    return { ok: true, value: undefined };
+    let raw: unknown;
+    try {
+      const resp = await fetch(REVOKE_URL, {
+        method: "POST",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams(formParams).toString(),
+      });
+
+      raw = await resp.json().catch(() => null);
+
+      if (resp.status === 401) {
+        // Token already revoked — treat as success (best-effort revocation)
+        return { ok: true, value: undefined };
+      }
+
+      if (!resp.ok) {
+        const err = raw as TwitterErrorResponse | null;
+        return {
+          ok: false,
+          error: {
+            kind: "platform_error",
+            message:
+              err?.detail ?? err?.title ?? `Twitter token revocation returned HTTP ${resp.status}`,
+            raw,
+          },
+        };
+      }
+
+      return { ok: true, value: undefined };
+    } catch (err) {
+      return {
+        ok: false,
+        error: {
+          kind: "network_error",
+          message: err instanceof Error ? err.message : "Unknown network error",
+          raw: err,
+        },
+      };
+    }
   }
 
   async fetchProfile(credential: AdapterCredential): Promise<AdapterResult<ProfileSnapshot>> {
-    const userResult = await this.getUser(credential.accessToken);
+    const userResult = await this.getUser(credential.accessToken, credential.refreshToken ?? "");
     if (!userResult.ok) return userResult;
 
     const user = userResult.value;
@@ -229,12 +386,19 @@ export class TwitterAdapter implements BasePlatformAdapter {
       tweetBody.media = { media_ids: mediaIds };
     }
 
+    const authHeader = this.signRequest({
+      method: "POST",
+      url: TWEETS_URL,
+      oauthToken: credential.accessToken,
+      tokenSecret: credential.refreshToken ?? "",
+    });
+
     let raw: unknown;
     try {
       const resp = await fetch(TWEETS_URL, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${credential.accessToken}`,
+          Authorization: authHeader,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(tweetBody),
@@ -402,11 +566,19 @@ export class TwitterAdapter implements BasePlatformAdapter {
     );
     form.append("media_category", "tweet_image");
 
+    // Multipart bodies are not included in the OAuth signature base string
+    const authHeader = this.signRequest({
+      method: "POST",
+      url: MEDIA_UPLOAD_URL,
+      oauthToken: credential.accessToken,
+      tokenSecret: credential.refreshToken ?? "",
+    });
+
     let raw: unknown;
     try {
       const resp = await fetch(MEDIA_UPLOAD_URL, {
         method: "POST",
-        headers: { Authorization: `Bearer ${credential.accessToken}` },
+        headers: { Authorization: authHeader },
         body: form,
       });
 
@@ -474,78 +646,23 @@ export class TwitterAdapter implements BasePlatformAdapter {
     }
   }
 
-  private get basicAuth(): string {
-    return Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
-  }
-
-  private async postForm<T>(url: string, body: URLSearchParams): Promise<AdapterResult<T>> {
-    let raw: unknown;
-    try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${this.basicAuth}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: body.toString(),
-      });
-
-      raw = await resp.json().catch(() => null);
-
-      if (resp.status === 401) {
-        return {
-          ok: false,
-          error: { kind: "auth_expired", message: "Twitter credentials rejected", raw },
-        };
-      }
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get("retry-after");
-        return {
-          ok: false,
-          error: {
-            kind: "rate_limited",
-            message: "Twitter API rate limit exceeded",
-            raw,
-            retryAfterSeconds: retryAfter ? Number(retryAfter) : 60,
-          },
-        };
-      }
-
-      if (!resp.ok) {
-        const err = raw as TwitterErrorResponse | null;
-        return {
-          ok: false,
-          error: {
-            kind: "platform_error",
-            message: err?.error_description ?? err?.error ?? `Twitter returned HTTP ${resp.status}`,
-            raw,
-          },
-        };
-      }
-
-      return { ok: true, value: raw as T };
-    } catch (err) {
-      return {
-        ok: false,
-        error: {
-          kind: "network_error",
-          message: err instanceof Error ? err.message : "Unknown network error",
-          raw: err,
-        },
-      };
-    }
-  }
-
   private async getUser(
     accessToken: string,
+    tokenSecret: string,
   ): Promise<
     AdapterResult<{ id: string; name: string; username: string; profile_image_url?: string }>
   > {
+    const authHeader = this.signRequest({
+      method: "GET",
+      url: USER_ME_URL,
+      oauthToken: accessToken,
+      tokenSecret,
+    });
+
     let raw: unknown;
     try {
       const resp = await fetch(USER_ME_URL, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: authHeader },
       });
 
       raw = await resp.json().catch(() => null);
@@ -585,5 +702,92 @@ export class TwitterAdapter implements BasePlatformAdapter {
         },
       };
     }
+  }
+
+  /**
+   * Build an OAuth 1.0a Authorization header for a request.
+   *
+   * - formParams: included in the signature base string (application/x-www-form-urlencoded body).
+   *   Multipart bodies are NOT included per OAuth spec.
+   * - Query params in `url` are automatically parsed and included in the signature.
+   */
+  private signRequest(opts: {
+    method: "GET" | "POST";
+    url: string;
+    formParams?: Record<string, string>;
+    oauthToken?: string;
+    oauthVerifier?: string;
+    oauthCallback?: string;
+    tokenSecret?: string;
+  }): string {
+    const {
+      method,
+      url,
+      formParams = {},
+      oauthToken,
+      oauthVerifier,
+      oauthCallback,
+      tokenSecret,
+    } = opts;
+
+    const urlObj = new URL(url);
+    const baseUrl = `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}`;
+
+    // Collect query params to include in the signature base string
+    const queryParams: Record<string, string> = {};
+    urlObj.searchParams.forEach((value, key) => {
+      queryParams[key] = value;
+    });
+
+    const nonce = randomBytes(16).toString("hex");
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+
+    const oauthParams: Record<string, string> = {
+      oauth_consumer_key: this.consumerKey,
+      oauth_nonce: nonce,
+      oauth_signature_method: "HMAC-SHA1",
+      oauth_timestamp: timestamp,
+      oauth_version: "1.0",
+    };
+
+    if (oauthToken) oauthParams.oauth_token = oauthToken;
+    if (oauthVerifier) oauthParams.oauth_verifier = oauthVerifier;
+    if (oauthCallback) oauthParams.oauth_callback = oauthCallback;
+
+    // Merge all param sources for signature calculation
+    const allParams: Record<string, string> = { ...oauthParams, ...queryParams, ...formParams };
+
+    // Sort by percent-encoded key, then percent-encoded value (per RFC 5849 §3.4.1.3.2)
+    const sortedParams = Object.entries(allParams)
+      .sort(([ak, av], [bk, bv]) => {
+        const encAk = this.percentEncode(ak);
+        const encBk = this.percentEncode(bk);
+        if (encAk !== encBk) return encAk < encBk ? -1 : 1;
+        return this.percentEncode(av) < this.percentEncode(bv) ? -1 : 1;
+      })
+      .map(([k, v]) => `${this.percentEncode(k)}=${this.percentEncode(v)}`)
+      .join("&");
+
+    const baseString = `${method}&${this.percentEncode(baseUrl)}&${this.percentEncode(sortedParams)}`;
+    const signingKey = `${this.percentEncode(this.consumerSecret)}&${this.percentEncode(tokenSecret ?? "")}`;
+
+    const signature = createHmac("sha1", signingKey).update(baseString).digest("base64");
+
+    oauthParams.oauth_signature = signature;
+
+    return (
+      "OAuth " +
+      Object.entries(oauthParams)
+        .map(([k, v]) => `${k}="${this.percentEncode(v)}"`)
+        .join(", ")
+    );
+  }
+
+  /** RFC 5849 §3.6 percent encoding — encode all chars except ALPHA / DIGIT / "-" / "." / "_" / "~" */
+  private percentEncode(str: string): string {
+    return encodeURIComponent(str).replace(
+      /[!'()*]/g,
+      (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
   }
 }

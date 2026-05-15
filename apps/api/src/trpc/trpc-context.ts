@@ -5,6 +5,7 @@ import { resolveSession } from "../auth/session-resolver";
 import type { EncryptionService } from "../encryption/encryption.service";
 import type { OAuthStateService } from "../platforms/oauth-state.service";
 import type { PostPublishQueueService } from "../queues/post-publish-queue.service";
+import type { RedisService } from "../redis/redis.service";
 import type { R2Service } from "../storage/r2.service";
 
 export type TrpcContext = {
@@ -17,6 +18,7 @@ export type TrpcContext = {
   config: ConfigService;
   encryption: EncryptionService;
   postPublishQueue: PostPublishQueueService;
+  redis: RedisService;
 };
 
 export async function createTrpcContext(opts: {
@@ -27,6 +29,7 @@ export async function createTrpcContext(opts: {
   config: ConfigService;
   encryption: EncryptionService;
   postPublishQueue: PostPublishQueueService;
+  redis: RedisService;
 }): Promise<TrpcContext> {
   const authHeader = opts.req.headers.get("authorization");
   const brandIdHeader = opts.req.headers.get("x-brand-id");
@@ -44,5 +47,6 @@ export async function createTrpcContext(opts: {
     config: opts.config,
     encryption: opts.encryption,
     postPublishQueue: opts.postPublishQueue,
+    redis: opts.redis,
   };
 }

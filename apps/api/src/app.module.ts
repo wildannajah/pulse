@@ -8,6 +8,7 @@ import { HealthModule } from "./health/health.module";
 import { PlatformsModule } from "./platforms/platforms.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { QueuesModule } from "./queues/queues.module";
+import { RedisModule } from "./redis/redis.module";
 import { StorageModule } from "./storage/storage.module";
 import { TrpcModule } from "./trpc/trpc.module";
 
@@ -17,6 +18,7 @@ import { TrpcModule } from "./trpc/trpc.module";
       isGlobal: true,
       validate: validateEnv,
     }),
+    RedisModule,
     PrismaModule,
     AuthModule,
     EncryptionModule,

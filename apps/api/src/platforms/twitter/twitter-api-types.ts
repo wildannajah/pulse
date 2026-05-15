@@ -49,3 +49,18 @@ export type TwitterMediaUploadResponse = {
   image?: { image_type: string; w: number; h: number };
   video?: { video_type: string };
 };
+
+/** URL-encoded response from POST https://api.twitter.com/oauth/request_token */
+export type TwitterOAuth1RequestTokenResponse = {
+  oauth_token: string;
+  oauth_token_secret: string;
+  oauth_callback_confirmed: string;
+};
+
+/** URL-encoded response from POST https://api.twitter.com/oauth/access_token */
+export type TwitterOAuth1AccessTokenResponse = {
+  oauth_token: string;
+  oauth_token_secret: string;
+  user_id: string;
+  screen_name: string;
+};

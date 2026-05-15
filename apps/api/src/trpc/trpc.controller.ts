@@ -12,6 +12,8 @@ import { PrismaService } from "../prisma/prisma.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { PostPublishQueueService } from "../queues/post-publish-queue.service";
 // biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
+import { RedisService } from "../redis/redis.service";
+// biome-ignore lint/style/useImportType: NestJS DI needs the runtime class for emitDecoratorMetadata
 import { R2Service } from "../storage/r2.service";
 import { appRouter } from "./app-router";
 import { createTrpcContext } from "./trpc-context";
@@ -25,6 +27,7 @@ export class TrpcController {
     private readonly config: ConfigService,
     private readonly encryption: EncryptionService,
     private readonly postPublishQueue: PostPublishQueueService,
+    private readonly redis: RedisService,
   ) {}
 
   @All("*path")
@@ -66,6 +69,7 @@ export class TrpcController {
           config: this.config,
           encryption: this.encryption,
           postPublishQueue: this.postPublishQueue,
+          redis: this.redis,
         }),
     });
 

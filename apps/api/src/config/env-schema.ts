@@ -19,8 +19,8 @@ export const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
   R2_PUBLIC_URL: z.string().url(),
-  TWITTER_CLIENT_ID: z.string().min(1),
-  TWITTER_CLIENT_SECRET: z.string().min(1),
+  TWITTER_CONSUMER_KEY: z.string().min(1),
+  TWITTER_CONSUMER_SECRET: z.string().min(1),
   META_APP_ID: z.string().min(1),
   META_APP_SECRET: z.string().min(1),
 });

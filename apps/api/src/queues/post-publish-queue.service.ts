@@ -1,25 +1,16 @@
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { Queue } from "bullmq";
-import { Redis } from "ioredis";
 
+import { RedisService } from "../redis/redis.service";
 import type { PostPublishJob } from "./queue-types";
 
 @Injectable()
 export class PostPublishQueueService implements OnModuleDestroy {
-  private readonly redis: Redis;
   private readonly queue: Queue<PostPublishJob>;
 
-  constructor(private readonly config: ConfigService) {
-    const redisUrl = this.config.get<string>("REDIS_URL");
-    if (!redisUrl) {
-      throw new Error("REDIS_URL is required");
-    }
-
-    this.redis = new Redis(redisUrl, { maxRetriesPerRequest: null, lazyConnect: true });
-
+  constructor(private readonly redis: RedisService) {
     this.queue = new Queue<PostPublishJob>("post-publish", {
-      connection: this.redis,
+      connection: this.redis.client,
       defaultJobOptions: {
         attempts: 5,
         backoff: { type: "exponential", delay: 60_000 },
@@ -40,6 +31,6 @@ export class PostPublishQueueService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.queue.close();
-    await this.redis.quit();
+    // RedisService owns the Redis client lifecycle — no quit() needed here
   }
 }

@@ -67,8 +67,8 @@ function buildAdapters(): Record<Platform, BasePlatformAdapter> {
   return {
     instagram: new MetaAdapter({ platform: "instagram", ...metaConfig }),
     twitter: new TwitterAdapter({
-      clientId: process.env.TWITTER_CLIENT_ID ?? "",
-      clientSecret: process.env.TWITTER_CLIENT_SECRET ?? "",
+      consumerKey: process.env.TWITTER_CONSUMER_KEY ?? "",
+      consumerSecret: process.env.TWITTER_CONSUMER_SECRET ?? "",
     }),
     facebook: new MetaAdapter({ platform: "facebook", ...metaConfig }),
     linkedin: new NotImplementedAdapter("linkedin"),
