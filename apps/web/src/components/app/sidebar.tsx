@@ -18,6 +18,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { trpc } from "@/lib/trpc/trpc";
 import { cn } from "@/lib/utils/cn";
 import { useBrandStore } from "@/stores/brand-store";
@@ -190,6 +191,10 @@ export function Sidebar({ user }: SidebarProps) {
           <Settings size={15} className="text-muted-foreground" />
           Settings
         </Link>
+        <div className="mb-1 flex items-center justify-between px-2 py-1">
+          <span className="text-[11px] font-medium text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-neutral-700 text-[11px] font-bold text-white">
             {userInitials}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { MediaUploader, type UploadedMedia } from "@/components/composer/media-uploader";
+import { SchedulePicker } from "@/components/composer/schedule-picker";
 import { TextEditor } from "@/components/composer/text-editor";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/trpc";
@@ -16,6 +17,7 @@ const TWITTER_LIMIT = 280;
 export function ComposerClient() {
   const [text, setText] = useState("");
   const [media, setMedia] = useState<UploadedMedia[]>([]);
+  const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
   const accountsQuery = trpc.connectedAccount.list.useQuery(undefined, {
@@ -30,9 +32,19 @@ export function ComposerClient() {
   const isMutating = postCreate.isPending || postPublishNow.isPending;
   const isOverLimit = text.length > TWITTER_LIMIT;
   const isEmpty = text.trim().length === 0;
+  const hasFutureSchedule = scheduledAt !== null && scheduledAt.getTime() > Date.now();
 
-  const publishNowDisabled = isEmpty || isOverLimit || !hasActiveTwitter || isMutating;
+  const publishNowDisabled =
+    isEmpty || isOverLimit || !hasActiveTwitter || isMutating || hasFutureSchedule;
   const saveDraftDisabled = isEmpty || isMutating;
+  const scheduleDisabled =
+    isEmpty || isOverLimit || !hasActiveTwitter || isMutating || !hasFutureSchedule;
+
+  const resetComposer = () => {
+    setText("");
+    setMedia([]);
+    setScheduledAt(null);
+  };
 
   const handlePublishNow = async () => {
     try {
@@ -43,8 +55,7 @@ export function ComposerClient() {
       })) as { id: string; status: string };
       await postPublishNow.mutateAsync({ id: created.id });
       toast.success("Tweet queued — publishing now");
-      setText("");
-      setMedia([]);
+      resetComposer();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to publish");
     }
@@ -58,10 +69,25 @@ export function ComposerClient() {
         mediaKeys: media.map((m) => m.storageKey),
       });
       toast.success("Draft saved");
-      setText("");
-      setMedia([]);
+      resetComposer();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save draft");
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!scheduledAt) return;
+    try {
+      await postCreate.mutateAsync({
+        text,
+        platforms: ["twitter"],
+        mediaKeys: media.map((m) => m.storageKey),
+        scheduledAt,
+      });
+      toast.success("Post scheduled");
+      resetComposer();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to schedule");
     }
   };
 
@@ -92,6 +118,9 @@ export function ComposerClient() {
         {/* Media uploader */}
         <MediaUploader value={media} onChange={setMedia} maxItems={4} disabled={isMutating} />
 
+        {/* Scheduler */}
+        <SchedulePicker value={scheduledAt} onChange={setScheduledAt} disabled={isMutating} />
+
         {/* Warning: no connected twitter */}
         {!accountsQuery.isLoading && !hasActiveTwitter ? (
           <div className="flex items-start gap-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2.5 text-[12px] text-yellow-800">
@@ -110,9 +139,12 @@ export function ComposerClient() {
         ) : null}
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={handleSaveDraft} disabled={saveDraftDisabled}>
             Save Draft
+          </Button>
+          <Button variant="outline" onClick={handleSchedule} disabled={scheduleDisabled}>
+            Schedule
           </Button>
           <Button onClick={handlePublishNow} disabled={publishNowDisabled}>
             Publish Now

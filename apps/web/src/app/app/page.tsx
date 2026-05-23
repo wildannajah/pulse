@@ -6,6 +6,7 @@ import { Plus, Zap } from "lucide-react";
 import Link from "next/link";
 import { ActivityFeed } from "@/components/app/activity-feed";
 import { EmptyState } from "@/components/app/empty-state";
+import { NotificationBell } from "@/components/app/notification-bell";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc/trpc";
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader title="Dashboard">
+        <NotificationBell />
         <Button size="sm" asChild>
           <Link href="/app/composer">
             <Plus size={14} />

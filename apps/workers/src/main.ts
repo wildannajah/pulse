@@ -3,7 +3,9 @@ import { closeBoard, startBoard } from "./board";
 import { postPublishWorker } from "./queues/post-publish.worker";
 import { redis } from "./redis";
 
-const BOARD_PORT = Number(process.env.PORT ?? process.env.BOARD_PORT ?? 3001);
+// BOARD_PORT wins so workers can't accidentally collide with the API (which uses PORT=3001).
+// PORT is kept as a fallback so platforms that inject it (Railway, Heroku, Fly) still work.
+const BOARD_PORT = Number(process.env.BOARD_PORT ?? process.env.PORT ?? 3002);
 const workers = [postPublishWorker];
 
 async function shutdown(signal: string) {

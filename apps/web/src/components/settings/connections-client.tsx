@@ -53,7 +53,11 @@ export function ConnectionsClient() {
 
   const disconnect = trpc.connectedAccount.disconnect.useMutation({
     onSuccess: () => {
+      toast.success("Account disconnected");
       listQuery.refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || "Failed to disconnect account");
     },
   });
 

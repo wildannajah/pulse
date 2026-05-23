@@ -29,7 +29,7 @@ import type {
 const REQUEST_TOKEN_URL = "https://api.twitter.com/oauth/request_token";
 const AUTHORIZE_URL = "https://api.twitter.com/oauth/authorize";
 const ACCESS_TOKEN_URL = "https://api.twitter.com/oauth/access_token";
-const REVOKE_URL = "https://api.twitter.com/1.1/oauth/invalidate_token";
+const REVOKE_URL = "https://api.twitter.com/1.1/oauth/invalidate_token.json";
 const MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json";
 const TWEETS_URL = "https://api.x.com/2/tweets";
 const USER_ME_URL = "https://api.x.com/2/users/me?user.fields=profile_image_url,url,name,username";
@@ -310,19 +310,27 @@ export class TwitterAdapter implements BasePlatformAdapter {
 
       raw = await resp.json().catch(() => null);
 
-      if (resp.status === 401) {
-        // Token already revoked — treat as success (best-effort revocation)
+      // Best-effort revocation: Twitter's v1.1 invalidate_token.json is unreliable
+      // (deprecated behavior, OAuth 1.0a phase-out, app-permission mismatches all
+      // surface as 400/401/403). The caller deletes the local row regardless, so
+      // we collapse these client-error statuses into success and only surface
+      // network errors or 5xx responses.
+      if (resp.status === 401 || resp.status === 400 || resp.status === 403) {
         return { ok: true, value: undefined };
       }
 
       if (!resp.ok) {
         const err = raw as TwitterErrorResponse | null;
+        const v11Message = err?.errors?.[0]?.message;
         return {
           ok: false,
           error: {
             kind: "platform_error",
             message:
-              err?.detail ?? err?.title ?? `Twitter token revocation returned HTTP ${resp.status}`,
+              err?.detail ??
+              err?.title ??
+              v11Message ??
+              `Twitter token revocation returned HTTP ${resp.status}`,
             raw,
           },
         };

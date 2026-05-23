@@ -4,7 +4,7 @@ The plan we're actually executing. Scope: build a working social-media managemen
 
 > **Operating principle:** substrate is SaaS-grade from day one (so M3 public launch is bolt-on, not refactor); public-facing artifacts (billing, marketing, legal, support) wait until we go public.
 
-> **Last reviewed: 2026-05-14.**
+> **Last reviewed: 2026-05-23.**
 
 Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 
@@ -108,12 +108,12 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [ ] YouTube — adapter + OAuth + publish (Shorts only for now?) + analytics
 
 ### Phase G — tRPC procedures (parallel to platform work)
-- [ ] `brand.list / get / update / create`
-- [ ] `connectedAccount.startOAuth / list / disconnect / refreshNow`
-- [ ] `post.create / update / list / delete / schedule / publishNow / cancel`
+- [~] `brand.list / get / update / create` — list/get/update shipped; create missing
+- [~] `connectedAccount.startOAuth / list / disconnect / refreshNow` — first three shipped; refreshNow missing
+- [~] `post.create / update / list / delete / schedule / publishNow / cancel` — create/list/get/delete/publishNow shipped; schedule is a NOT_IMPLEMENTED stub; update/cancel missing
 - [ ] `postVariant.update` — per-platform overrides
-- [ ] `inbox.list / get / reply / markRead / assign`
-- [ ] `analytics.brandOverview / postMetrics / topPosts`
+- [~] `inbox.list / get / reply / markRead / assign` — list/get/markRead/reply shipped; assign missing
+- [~] `analytics.brandOverview / postMetrics / topPosts` — brandOverview + topPosts shipped; `followerGrowth` shipped in place of `postMetrics` (rename or add both)
 - [ ] `aiGeneration.caption / hashtags / toneAdjust`
 - [ ] `hashtagSet.list / create / update / delete`
 - [ ] `postTemplate.list / create / update / delete`
@@ -137,39 +137,39 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 ## Frontend work (built on shadcn defaults; re-skin later when design system lands)
 
 ### Phase J — App shell
-- [~] Sidebar navigation (Dashboard / Calendar / Composer / Inbox / Analytics / Settings)
-- [ ] Top bar with brand switcher dropdown + user menu
+- [x] Sidebar navigation (Dashboard / Calendar / Composer / Posts / Activity / Inbox / Analytics + Settings footer)
+- [x] Brand switcher dropdown + user menu (placed in sidebar, not top bar — functionally equivalent)
 - [ ] Workspace switcher (only relevant if team has multiple workspaces)
-- [ ] Empty states for "no connected accounts" everywhere
+- [~] Empty states for "no connected accounts" everywhere — EmptyState component exists, used on dashboard + inbox; not yet wired on calendar/analytics/posts
 
 ### Phase K — Composer
-- [~] Composer page layout (left: editor, right: previews)
-- [ ] Tiptap editor with platform-aware char counts
+- [x] Composer page layout (left: editor, right: previews)
+- [~] Tiptap editor with platform-aware char counts — plain `<textarea>` with char count today; Tiptap swap deferred
 - [ ] Per-platform variant overrides (toggle "different text for Twitter")
-- [ ] Media upload UI (drag-drop + click-to-upload + progress + cancel)
-- [ ] Per-platform preview cards (Instagram, Twitter, LinkedIn, Facebook, Threads, TikTok, YouTube)
-- [ ] Date+time scheduler (react-day-picker + time input + TZ selector)
-- [~] Save draft / Schedule / Publish-now buttons
+- [x] Media upload UI (drag-drop + click-to-upload + progress + cancel) — `media-uploader.tsx`
+- [~] Per-platform preview cards — Twitter only; remaining six platforms TODO
+- [x] Date+time scheduler (`schedule-picker.tsx` — native datetime-local + TZ display)
+- [x] Save draft / Schedule / Publish-now buttons
 - [ ] Hashtag picker (loads `HashtagSet` rows)
 - [ ] Template loader (loads `PostTemplate` rows)
 - [ ] AI generate button → caption / tone / hashtags
 
 ### Phase L — Calendar
-- [ ] Monthly grid view
+- [x] Monthly grid view (real current month, prev/next/today navigation)
 - [ ] Weekly view toggle
-- [ ] Platform color coding on post chips
-- [ ] Click chip → read-only detail drawer
+- [x] Platform color coding on post chips (`PLATFORM_CONSTRAINTS.chipBg/chipText`)
+- [x] Click chip → read-only detail panel (right-side aside)
 - [ ] Edit scheduled post (only if before publish window)
 - [ ] Drag-drop reschedule (`@dnd-kit`)
-- [ ] Filter by platform / status / team member
+- [x] Filter by platform / status (team filter deferred until approval workflow lands)
 - [ ] Draft slot placeholders
 
 ### Phase M — Inbox
-- [ ] Chronological list view
-- [ ] Read / unread / resolved status toggles
-- [ ] Per-platform filter
+- [x] Chronological list view
+- [~] Read / unread / resolved status toggles — read/unread visible (dot indicator + `markRead`); explicit resolved state TODO
+- [x] Per-platform filter
 - [ ] DM / comment / mention type filter
-- [ ] Reply UI (per-platform via adapter)
+- [~] Reply UI (per-platform via adapter) — textarea present; `inbox.reply` mutation wiring + send button still TODO
 - [ ] Optimistic UI for replies + rollback on failure
 - [ ] Saved replies picker
 - [ ] Assign to team member (if approval workflow on)
@@ -177,17 +177,17 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 ### Phase N — Analytics
 - [ ] Brand overview cards (followers, impressions, reach, engagement rate)
 - [ ] Post performance table (sortable: likes, comments, shares, reach)
-- [ ] Date range filter
-- [ ] Per-platform tab
+- [x] Date range filter (7d / 30d / 90d toggle)
+- [x] Per-platform tab
 - [ ] Follower growth line chart (Recharts)
 - [ ] Engagement rate trend chart
 - [ ] Top posts panel
 - [ ] CSV export of post performance
 
 ### Phase O — Dashboard
-- [ ] Per-platform status cards
-- [ ] Unified feed (chronological recent activity)
-- [ ] Quick post button (floating, opens composer modal)
+- [~] Per-platform status cards — 7 platform placeholder cards present; metrics still "—" until analytics-sync ships
+- [x] Unified feed (`ActivityFeed` component on dashboard)
+- [ ] Quick post button (floating, opens composer modal) — "New post" exists in header; floating variant TODO
 - [ ] Notification bell with aggregated notifications
 
 ### Phase P — Settings
@@ -285,8 +285,8 @@ Update this section as work progresses.
 > The `0/52` and `0/48` numbers reflect feature-phase progress only and are not a
 > measure of total project progress.
 
-- **Backend phases:** A 2/2 · B 7/7 · C 8/9 · D 9/9 · E 0/8 · F 0/6 · G 0/10 · H 0/5 · I 0/4 → **25 of ~57 done**
-- **Frontend phases:** J 0/4 · K 0/10 · L 0/8 · M 0/8 · N 0/8 · O 0/4 · P 0/6 → **0 of ~48 done**
+- **Backend phases:** A 2/2 · B 7/7 · C 9/9 · D 9/9 · E 1/8 · F 5/16 · G ~4/10 · H 0/5 · I 0/4 → **~37 of ~70 done**
+- **Frontend phases:** J 2/4 · K 4/10 · L 5/8 · M 2/8 · N 2/8 · O 1/4 · P 1/6 → **17 of ~48 done**
 - **SaaS-readiness:** 10 of 21 done (the schema/architecture half)
 
 **First milestone:** Phase A + B + D + C complete = first tweet published via Pulse end-to-end. Target: ~1 week of focused work after AI/workers hosting decisions land.
@@ -298,6 +298,14 @@ Update this section as work progresses.
 ### Session log
 
 ---
+
+- **2026-05-23** — Frontend UI session. Tracker was understating progress across
+  Phases G/J/K/L/M/N/O — audited code vs file and flipped boxes. Shipped:
+  composer **schedule picker** (`schedule-picker.tsx`) wired through
+  `post.create({ scheduledAt })`, replacing the not-yet-implemented `post.schedule`;
+  **calendar** rebuilt to use the real current month with prev/next/today
+  navigation + platform/status filters (was hardcoded to April 2026); dashboard
+  **notification bell** placeholder added to `PageHeader` slot.
 
 - **2026-05-14** — Twitter end-to-end publish verified ✅. Meta Developer App
   registered; Facebook + Instagram OAuth redirect URIs configured for prod +

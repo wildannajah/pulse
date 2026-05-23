@@ -141,14 +141,26 @@ export const connectedAccountRouter = router({
       });
 
       if (!revokeResult.ok) {
-        // Log but don't fail — the row is deleted regardless.
+        // Log but don't fail — the row is soft-deleted regardless.
         // The platform may have already invalidated the token server-side.
         console.warn(
           `[connectedAccount.disconnect] revokeToken for ${platform} account=${account.id} failed: ${revokeResult.error.message}`,
         );
       }
 
-      await ctx.prisma.connectedAccount.delete({ where: { id: account.id } });
+      // Soft-delete so historical PostPublication / InboxItem rows keep their FK.
+      // (PostPublication.connectedAccount and InboxItem.connectedAccount are
+      // declared without onDelete: Cascade; a hard delete would FK-violate.)
+      await ctx.prisma.connectedAccount.update({
+        where: { id: account.id },
+        data: {
+          deletedAt: new Date(),
+          status: "REVOKED",
+          // Wipe credentials at rest — the row sticks around for history only.
+          accessToken: "",
+          refreshToken: null,
+        },
+      });
 
       return { ok: true };
     }),
