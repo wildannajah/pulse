@@ -107,10 +107,8 @@ export default function CalendarPage() {
     return sameDay(new Date(raw), selectedDate);
   });
 
-  const goPrevMonth = () =>
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
-  const goNextMonth = () =>
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
+  const goPrevMonth = () => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
+  const goNextMonth = () => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
   const goToday = () => {
     const now = new Date();
     setCursor(new Date(now.getFullYear(), now.getMonth(), 1));

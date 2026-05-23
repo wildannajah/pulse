@@ -31,14 +31,9 @@ export function ThemeToggle({ variant = "segmented", className }: ThemeTogglePro
 
   if (variant === "icon") {
     const active = (mounted ? theme : "system") as Mode;
-    const next: Mode =
-      active === "light" ? "dark" : active === "dark" ? "system" : "light";
+    const next: Mode = active === "light" ? "dark" : active === "dark" ? "system" : "light";
     const Icon =
-      !mounted || active === "system"
-        ? Monitor
-        : (resolvedTheme ?? active) === "dark"
-          ? Moon
-          : Sun;
+      !mounted || active === "system" ? Monitor : (resolvedTheme ?? active) === "dark" ? Moon : Sun;
     return (
       <button
         type="button"

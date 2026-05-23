@@ -59,9 +59,7 @@ export function NotificationBell() {
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <span className="text-[12px] font-semibold">Notifications</span>
               {unreadCount > 0 ? (
-                <span className="text-[11px] text-muted-foreground">
-                  {unreadCount} unread
-                </span>
+                <span className="text-[11px] text-muted-foreground">{unreadCount} unread</span>
               ) : null}
             </div>
             <div className="max-h-[340px] overflow-y-auto">

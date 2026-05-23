@@ -83,8 +83,9 @@ export function SchedulePicker({ value, onChange, disabled = false }: SchedulePi
       <p className="text-[11px] text-muted-foreground">
         {value ? (
           <>
-            Will publish <span className="font-medium text-foreground">{format(value, "PPPP 'at' p")}</span>{" "}
-            ({tzName})
+            Will publish{" "}
+            <span className="font-medium text-foreground">{format(value, "PPPP 'at' p")}</span> (
+            {tzName})
           </>
         ) : (
           <>Times shown in your local timezone ({tzName}). Stored as UTC.</>
