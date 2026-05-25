@@ -237,6 +237,10 @@ export class OAuthCallbackController {
         lastErrorAt: null,
         lastErrorMessage: null,
         lastSyncedAt: new Date(),
+        // Reconnecting after a disconnect must un-soft-delete the row, otherwise
+        // `connectedAccount.list` (which filters deletedAt: null) hides it.
+        deletedAt: null,
+        reconnectedAt: new Date(),
       },
     });
 
