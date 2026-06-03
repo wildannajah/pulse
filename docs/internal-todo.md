@@ -36,9 +36,9 @@ Legend: `[x]` done · `[ ]` not started · `[~]` partial / in progress
 - [x] tRPC `connectedAccount.startOAuth` brand procedure (returns authorization URL)
 
 ### Phase C — Twitter/X end-to-end (~3 days, pilot platform)
-- [x] Register Twitter dev app (manual step) — get client ID + secret into env
+- [x] Register Twitter dev app (manual step) — get consumer key + secret into env (`TWITTER_CONSUMER_KEY` / `TWITTER_CONSUMER_SECRET`)
 - [x] `TwitterAdapter implements BasePlatformAdapter`
-- [x] OAuth 2.0 + PKCE callback handler
+- [x] OAuth 1.0a three-legged callback handler — ~~OAuth 2.0 + PKCE replaced 2026-05-16~~ (see decision log)
 - [x] Encrypted token write to `ConnectedAccount` (encryption service ready)
 - [x] tRPC procedure: `connectedAccount.startOAuth(platform)` returns auth URL
 - [x] tRPC procedure: `connectedAccount.list / disconnect`
@@ -299,6 +299,10 @@ Update this section as work progresses.
 
 ---
 
+- **2026-05-25** — OAuth reconnect bug fixed: `connectedAccount` upsert no longer leaves `deletedAt` set when a user disconnects then reconnects the same account. `reconnectedAt` timestamp added for audit trail.
+
+- **2026-05-16** — Twitter OAuth migrated from 2.0 PKCE → 1.0a three-legged flow (see decision log). Env vars renamed `TWITTER_CLIENT_ID`/`SECRET` → `TWITTER_CONSUMER_KEY`/`TWITTER_CONSUMER_SECRET`. Token revocation and error handling hardened. Twitter media upload error handling improved. `post-publish` worker now logs media count in job result.
+
 - **2026-05-23** — Frontend UI session. Tracker was understating progress across
   Phases G/J/K/L/M/N/O — audited code vs file and flipped boxes. Shipped:
   composer **schedule picker** (`schedule-picker.tsx`) wired through
@@ -319,6 +323,21 @@ Update this section as work progresses.
   adapter media support).
 
 ---
+
+### 2026-05-16 — Twitter OAuth 2.0 PKCE → OAuth 1.0a
+
+OAuth 2.0 with PKCE was the original plan (Phase C), but Twitter's v2 API does not
+support media uploads — `POST /2/tweets` accepts `media_ids` but the upload endpoint
+(`https://upload.twitter.com/1.1/media/upload.json`) requires OAuth 1.0a signed
+requests. Maintaining two token types per account (1.0a for media, 2.0 for tweets)
+would be fragile. Decision: use **OAuth 1.0a for everything** on Twitter.
+
+Changes:
+- `buildAuthorizationUrl()` / `exchangeAuthCode()` replaced with a three-legged
+  `fetchRequestToken()` → redirect → `exchangeVerifier()` flow.
+- Request tokens stored in Redis (TTL = 10 min) keyed by `oauth_token`.
+- Env vars: `TWITTER_CLIENT_ID` / `TWITTER_CLIENT_SECRET` → `TWITTER_CONSUMER_KEY` / `TWITTER_CONSUMER_SECRET`.
+- `OAuthStateService` HMAC state token still used for CSRF protection.
 
 ### 2026-05-13 — OAuth callback origin
 
